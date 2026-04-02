@@ -1,0 +1,33 @@
+default_platform(:ios)
+
+def clean_fastlane
+  sh "rm -rf fastlane/test_output"
+  sh "rm -rf fastlane/logs"
+  sh "rm -rf fastlane/DerivedData"
+end
+
+
+platform :ios do
+  desc "SearchEngine unit test"
+  lane :unit_test do
+    clean_fastlane
+
+    scan(
+      scheme: "SearchEngineCI",
+      project: "CI/SearchEngine.xcodeproj",
+      clean: true,
+      code_coverage: true,
+      output_directory: "fastlane/test_output",
+      output_types: "junit",
+      output_files: "report.junit",
+      result_bundle: true,
+      buildlog_path: "fastlane/logs",
+      fail_build: true,
+      skip_package_dependencies_resolution: false,
+      xcargs: "CODE_SIGNING_ALLOWED=NO",
+      derived_data_path: "fastlane/DerivedData"
+    )
+  end
+
+
+end

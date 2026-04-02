@@ -1,0 +1,74 @@
+name: iOS SearchEngine CI/CD Pipeline
+
+on:
+  #push:
+  #  branches:
+  #    - main
+  #    - develop
+  #    - 'release/release*'
+  #    - 'hotfix/hotfix*'
+  #    - 'feature/*'
+  #pull_request:
+  #  branches:
+  #    - main
+  #    - develop
+  #    - 'release/release*'
+  #    - 'hotfix/hotfix*'
+  #    - 'feature/*'
+  workflow_dispatch: {}
+
+jobs:
+  searchengine-unit-tests:
+    name: SearchEngine Unit Tests
+    runs-on: macos-15
+    env:
+      FASTLANE_SKIP_CONF_PROMPT: 1
+      CI: true
+
+    steps:
+      - name: Checkout submodule repo
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+
+      - name: Install dependencies
+        run: |
+          gem install bundler
+          bundle install
+
+      - name: Run SearchEngine Unit Tests
+        run: |
+          bundle exec fastlane unit_test
+          
+      - name: Extract code coverage percentage
+        id: coverage
+        run: |
+          brew install llvm jq
+          mkdir -p output
+          xcrun llvm-cov export -format="json" \
+            .build/debug/SearchEnginePackageTests.xctest \
+            -instr-profile .build/debug/codecov/default.profdata > output/coverage.json
+
+          COVERAGE=$(jq '[.data[].files[].summary.line_coverage] | add / length * 100' output/coverage.json)
+          echo "Code Coverage: $COVERAGE%"
+          echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+
+      - name: Run Danger (non-blocking)
+        continue-on-error: true
+        env:
+          DANGER_GITHUB_API_TOKEN: ${{ secrets.DANGER_GITHUB_API_TOKEN }}
+        run: bundle exec danger
+        
+      #- name: Notify Slack (on failure only)
+      #if: failure()
+      #uses: 8398a7/action-slack@v3
+      #with:
+      #  status: ${{ job.status }}
+      #  fields: repo,message,commit,author,action,eventName,ref,workflow
+      #env:
+      #  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}

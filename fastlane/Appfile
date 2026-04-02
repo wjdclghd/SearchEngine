@@ -1,0 +1,3 @@
+app_identifier("com.jch.SearchEngine")
+#apple_id("your-apple-id@example.com")
+#team_id("XXXXXXXXXX") 
