@@ -20,23 +20,29 @@ let package = Package(
         )
     ],
     dependencies: [
-//        .package(url: "https://github.com/realm/realm-swift.git", from: "20.0.4")
+        
     ],
     targets: [
         .target(
             name: "SearchEngine",
             dependencies: [
-//                .product(name: "RealmSwift", package: "realm-swift")
+                
             ],
-            path: "Sources/SearchEngine"
+            path: "Sources/SearchEngine",
+            linkerSettings: [
+                .linkedLibrary("sqlite3")
+            ]
         ),
         .testTarget(
             name: "SearchEngineTests",
             dependencies: [
                 "SearchEngine",
-//                .product(name: "RealmSwift", package: "realm-swift")
+                
             ],
-            path: "Tests/SearchEngineTests"
+            path: "Tests/SearchEngineTests",
+            linkerSettings: [
+                .linkedLibrary("sqlite3")
+            ]
         )
     ]
 )
