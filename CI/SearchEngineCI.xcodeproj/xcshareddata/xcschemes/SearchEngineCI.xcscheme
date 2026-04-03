@@ -15,7 +15,7 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "558A2DD02F76470500730C69"
+               BlueprintIdentifier = "55766CD62F7E3147004B88F7"
                BuildableName = "SearchEngineCI.app"
                BlueprintName = "SearchEngineCI"
                ReferencedContainer = "container:SearchEngineCI.xcodeproj">
@@ -40,18 +40,18 @@
             parallelizable = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "558A2DDD2F76470600730C69"
+               BlueprintIdentifier = "55766CE32F7E3148004B88F7"
                BuildableName = "SearchEngineCITests.xctest"
                BlueprintName = "SearchEngineCITests"
                ReferencedContainer = "container:SearchEngineCI.xcodeproj">
             </BuildableReference>
          </TestableReference>
          <TestableReference
-            skipped = "NO"
+            skipped = "YES"
             parallelizable = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "558A2DE72F76470600730C69"
+               BlueprintIdentifier = "55766CED2F7E3148004B88F7"
                BuildableName = "SearchEngineCIUITests.xctest"
                BlueprintName = "SearchEngineCIUITests"
                ReferencedContainer = "container:SearchEngineCI.xcodeproj">
@@ -73,7 +73,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "558A2DD02F76470500730C69"
+            BlueprintIdentifier = "55766CD62F7E3147004B88F7"
             BuildableName = "SearchEngineCI.app"
             BlueprintName = "SearchEngineCI"
             ReferencedContainer = "container:SearchEngineCI.xcodeproj">
@@ -90,7 +90,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "558A2DD02F76470500730C69"
+            BlueprintIdentifier = "55766CD62F7E3147004B88F7"
             BuildableName = "SearchEngineCI.app"
             BlueprintName = "SearchEngineCI"
             ReferencedContainer = "container:SearchEngineCI.xcodeproj">

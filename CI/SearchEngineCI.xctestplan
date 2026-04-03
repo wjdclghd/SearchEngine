@@ -1,7 +1,7 @@
 {
   "configurations" : [
     {
-      "id" : "9F62ADFE-0A24-4353-ADE2-5C513B6E8DD8",
+      "id" : "22635FB6-E7C5-43A5-A72E-100D1E3895A9",
       "name" : "Test Scheme Action",
       "options" : {
 
@@ -12,7 +12,7 @@
     "performanceAntipatternCheckerEnabled" : true,
     "targetForVariableExpansion" : {
       "containerPath" : "container:SearchEngineCI.xcodeproj",
-      "identifier" : "558A2DD02F76470500730C69",
+      "identifier" : "55766CD62F7E3147004B88F7",
       "name" : "SearchEngineCI"
     }
   },
@@ -21,7 +21,7 @@
       "parallelizable" : true,
       "target" : {
         "containerPath" : "container:SearchEngineCI.xcodeproj",
-        "identifier" : "558A2DDD2F76470600730C69",
+        "identifier" : "55766CE32F7E3148004B88F7",
         "name" : "SearchEngineCITests"
       }
     }
