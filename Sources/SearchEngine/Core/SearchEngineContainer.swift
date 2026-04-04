@@ -121,4 +121,17 @@ public final class SearchEngineContainer {
     func makeSQLiteSearchDocumentStore() -> SQLiteSearchDocumentStore {
         SQLiteSearchDocumentStore(storage: sqliteStorage)
     }
+
+    /*
+     현재 컨테이너 설정으로 SQLiteSearchStore를 생성합니다.
+
+     검색 실행 구현체도 같은 SQLite foundation과 migration 기준 위에서 동작해야 하므로,
+     컨테이너는 검색 Store 조립 진입점도 함께 제공합니다.
+
+     Returns:
+     - 현재 컨테이너 기반으로 조립된 SQLiteSearchStore
+     */
+    func makeSQLiteSearchStore() -> SQLiteSearchStore {
+        SQLiteSearchStore(storage: sqliteStorage)
+    }
 }
