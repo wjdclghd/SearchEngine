@@ -15,7 +15,7 @@ import XCTest
 
  이 테스트는 SQL 공백 입력, statement 준비 실패, 읽기/쓰기 오류 매핑,
  in-memory 연결 문자열, 트랜잭션 롤백 같은 경계를 직접 확인하여
- 이후 Storage, Indexing, Querying 계층이 신뢰할 수 있는 실행 기반을 보장합니다.
+ 이후 Storage, Indexing, 검색 실행 계층이 신뢰할 수 있는 실행 기반을 보장합니다.
  */
 final class SQLiteDatabaseTests: XCTestCase {
     /*
