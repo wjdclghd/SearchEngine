@@ -137,7 +137,7 @@ final class SearchEngineConfigurationTests: XCTestCase {
      inMemory 설정에서 identifier가 비어 있으면 validate가 invalidConfiguration을 반환하는지 검증합니다.
 
      메모리 저장소도 shared cache URI를 만들기 위해 식별자가 필요하므로,
-     빈 문자열은 foundation 단계에서 미리 차단되어야 합니다.
+     빈 문자열은 미리 차단되어야 합니다.
      */
     func test_validate_withEmptyInMemoryIdentifier_throwsInvalidConfiguration() {
         let configuration = SearchEngineConfiguration.inMemory(identifier: "   ")
@@ -160,6 +160,7 @@ final class SearchEngineConfigurationTests: XCTestCase {
     func test_validate_withNegativeBusyTimeout_throwsInvalidConfiguration() {
         let configuration = SearchEngineConfiguration(
             storage: .inMemory(identifier: "SearchEngine.Tests"),
+            migrationPlan: .sqliteCore,
             busyTimeoutMilliseconds: -1,
             enablesWriteAheadLogging: false,
             enablesForeignKeys: true
@@ -214,12 +215,71 @@ final class SearchEngineConfigurationTests: XCTestCase {
     func test_validate_withZeroBusyTimeout_succeeds() {
         let configuration = SearchEngineConfiguration(
             storage: .inMemory(identifier: "SearchEngine.Tests"),
+            migrationPlan: .sqliteCore,
             busyTimeoutMilliseconds: 0,
             enablesWriteAheadLogging: false,
             enablesForeignKeys: true
         )
 
         XCTAssertNoThrow(try configuration.validate())
+    }
+
+
+    /*
+     기본 live 설정이 기본 migration plan을 보관하는지 검증합니다.
+
+     동일한 기본 migration 기준점 위에서
+     schema version이 누적되어야 하므로, 기본 configuration 생성 시 migration plan이 함께 설정되어야 합니다.
+
+     Throws:
+     - 테스트 과정에서 오류가 발생하면 에러를 던집니다.
+     */
+    func test_liveConfiguration_usesDefaultMigrationPlan() throws {
+        let temporaryDirectoryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+
+        defer {
+            try? FileManager.default.removeItem(at: temporaryDirectoryURL)
+        }
+
+        let configuration = try SearchEngineConfiguration.live(
+            directoryName: "SearchEngine",
+            fileName: "SearchEngine.sqlite",
+            baseDirectoryURL: temporaryDirectoryURL
+        )
+
+        XCTAssertEqual(configuration.migrationPlan, .sqliteCore)
+        XCTAssertEqual(configuration.migrationPlan.latestVersion, 1)
+    }
+
+    /*
+     잘못된 migration plan을 포함한 설정은 invalidConfiguration을 반환하는지 검증합니다.
+
+     migration version이 연속되지 않으면 어떤 버전에서 어떤 SQL이 적용되어야 하는지 모호해지므로,
+     SearchEngineConfiguration에서 먼저 차단해야 합니다.
+     */
+    func test_validate_withInvalidMigrationPlan_throwsInvalidConfiguration() {
+        let migrationPlan = SearchEngineMigrationPlan(
+            migrations: [
+                .init(version: 1, statements: ["CREATE TABLE metadata_v1 (id TEXT PRIMARY KEY);"]),
+                .init(version: 3, statements: ["CREATE TABLE metadata_v3 (id TEXT PRIMARY KEY);"])
+            ]
+        )
+        let configuration = SearchEngineConfiguration(
+            storage: .inMemory(identifier: "SearchEngine.Tests"),
+            migrationPlan: migrationPlan,
+            busyTimeoutMilliseconds: 0,
+            enablesWriteAheadLogging: false,
+            enablesForeignKeys: true
+        )
+
+        XCTAssertThrowsError(try configuration.validate()) { error in
+            guard case let SearchEngineError.invalidConfiguration(message) = error else {
+                return XCTFail("Expected invalidConfiguration, got \(error)")
+            }
+
+            XCTAssertFalse(message.isEmpty)
+        }
     }
 
 }

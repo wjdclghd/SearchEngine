@@ -56,7 +56,7 @@ public struct SearchSuggestionQuery: Equatable, Sendable {
 
      빈 제안 문자열, 0 이하의 limit, 빈 검색 범위는
      실제 Suggest 계층에서 모호한 분기를 만들 수 있으므로
-     foundation 단계에서 먼저 차단합니다.
+     먼저 차단합니다.
 
      Throws:
      - 질의 값이 올바르지 않으면 SearchEngineError.invalidQuery

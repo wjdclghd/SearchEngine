@@ -78,7 +78,7 @@ public struct SearchDocument: Equatable, Sendable {
 
      문서 식별자와 범위 식별자는 비어 있으면 안 되며,
      제목과 본문이 모두 비어 있는 문서는 검색 엔진에 의미 있는 색인 대상을 제공하지 못하므로
-     foundation 단계에서 미리 차단합니다.
+     미리 차단합니다.
 
      Throws:
      - 문서 값이 올바르지 않으면 SearchEngineError.invalidDocument

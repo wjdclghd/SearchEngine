@@ -13,15 +13,15 @@ import XCTest
 /*
  SearchEngineContainer의 기본 조립 동작을 확인하는 테스트입니다.
 
- sqlite-core 단계에서는 아직 공개 검색 엔진 구현체를 만들지 않지만,
+ 아직 공개 검색 엔진 구현체를 만들지 않지만,
  컨테이너가 설정값을 보관하고 내부 SQLite foundation을 안정적으로 준비할 수 있어야
- 이후 indexing, search, suggest 계층 확장 시 같은 초기화 흐름을 재사용할 수 있습니다.
+ indexing, search, suggest 계층 확장 시 같은 초기화 흐름을 재사용할 수 있습니다.
  */
 final class SearchEngineContainerTests: XCTestCase {
     /*
      in-memory 기본 컨테이너가 생성되는지 검증합니다.
 
-     컨테이너는 sqlite-core 단계의 기본 조립 진입점이므로,
+     컨테이너는 기본 조립 진입점이므로,
      디스크 의존 없는 초기화 경로가 정상 동작하는지 먼저 확인합니다.
 
      Throws:
@@ -38,7 +38,7 @@ final class SearchEngineContainerTests: XCTestCase {
     /*
      컨테이너가 내부 SQLite 저장 foundation을 구성할 수 있는지 검증합니다.
 
-     이후 기능 브랜치에서는 이 foundation 위에 색인기와 검색 실행기를 조립하게 되므로,
+     이 foundation 위에 색인기와 검색 실행기를 조립하게 되므로,
      컨테이너 수준에서 공통 기반이 준비되는지 확인합니다.
 
      Throws:

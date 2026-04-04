@@ -12,12 +12,13 @@ import SQLite3
  SQLite3 연결을 직접 관리하는 SearchEngine의 foundation 구현체입니다.
 
  이 타입은 SearchEngineConfiguration을 기반으로 데이터베이스를 열고,
- busy timeout, WAL, foreign key 같은 공통 pragma를 적용합니다.
+ busy timeout, WAL, foreign key 같은 공통 pragma를 적용한 뒤 migration plan을 수행합니다.
 
  담당 역할
  - SQLite 연결 열기와 종료
  - in-memory / disk 저장소별 connection string 결정
  - busy timeout, WAL, foreign key pragma 적용
+ - migration plan 실행 및 user_version 갱신
  - 읽기, 쓰기, 트랜잭션 실행 직렬화
  - statement 준비와 오류 메시지 유틸 제공
 
@@ -50,11 +51,20 @@ final class SQLiteDatabase: SQLiteDatabaseProtocol {
     init(configuration: SearchEngineConfiguration) throws {
         try configuration.validate()
         self.configuration = configuration
-        self.databasePointer = try SQLiteDatabase.openDatabase(configuration: configuration)
-        try SQLiteDatabase.configureDatabase(
-            databasePointer: databasePointer,
-            configuration: configuration
-        )
+
+        let openedDatabasePointer = try SQLiteDatabase.openDatabase(configuration: configuration)
+
+        do {
+            try SQLiteDatabase.configureDatabase(
+                databasePointer: openedDatabasePointer,
+                configuration: configuration
+            )
+            self.databasePointer = openedDatabasePointer
+            try configuration.migrationPlan.apply(using: self)
+        } catch {
+            sqlite3_close_v2(openedDatabasePointer)
+            throw error
+        }
     }
 
     deinit {

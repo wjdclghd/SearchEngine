@@ -12,9 +12,9 @@ import XCTest
 /*
  SQLBuilder의 기본 SQL 조립 동작을 확인하는 테스트입니다.
 
- sqlite-core 단계에서는 복잡한 검색 SQL 대신
+ 복잡한 검색 SQL 대신
  공통 조립 유틸이 일관된 문자열을 생성하는지 먼저 검증해두면,
- 이후 Querying 계층에서 조건 조합이 늘어나더라도 foundation 신뢰도를 유지할 수 있습니다.
+ Querying 계층에서 조건 조합이 늘어나더라도 foundation 신뢰도를 유지할 수 있습니다.
  */
 final class SQLBuilderTests: XCTestCase {
     /*

@@ -16,7 +16,7 @@ import Foundation
  독립적인 실행 환경을 만들 수 있어야 합니다.
 
  이 타입은 SearchEngineConfiguration.inMemory를 감싼 테스트 진입점 역할을 하며,
- sqlite-core 단계의 foundation 동작을 공통된 방식으로 검증할 수 있게 돕습니다.
+ 공통 저장 동작을 일관된 방식으로 검증할 수 있게 돕습니다.
  */
 enum InMemorySQLiteStorage {
     /*
