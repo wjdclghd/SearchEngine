@@ -12,7 +12,7 @@ import Foundation
 
  앱 또는 상위 모듈은 이 타입을 통해 SearchEngine foundation을 초기화합니다.
  컨테이너는 검색 엔진 초기화에 필요한 설정과 SQLite 기반 저장 foundation을 보관하고,
- 이후 색인기, 검색 실행기, 제안 생성기 같은 기능 객체를 구성하는 기반 역할을 담당합니다.
+ 이후 문서 저장 구현체, 검색 실행기, 제안 생성기 같은 기능 객체를 구성하는 기반 역할을 담당합니다.
 
  아직 공개 엔진 구현체를 직접 생성하지 않지만,
  동일한 초기화 흐름 위에 기능 조립을 확장할 수 있도록 컨테이너 구조를 먼저 마련합니다.
@@ -107,5 +107,18 @@ public final class SearchEngineContainer {
      */
     func makeSQLiteStorage() -> SQLiteStorageProtocol {
         sqliteStorage
+    }
+
+    /*
+     현재 컨테이너 설정으로 SQLiteSearchDocumentStore를 생성합니다.
+
+     문서 저장과 삭제 기능은 같은 SQLite foundation 위에서 동작해야 하므로,
+     컨테이너는 공통 저장 foundation을 재사용하는 Store 구현체 조립 진입점도 함께 제공합니다.
+
+     Returns:
+     - 현재 컨테이너 기반으로 조립된 SQLiteSearchDocumentStore
+     */
+    func makeSQLiteSearchDocumentStore() -> SQLiteSearchDocumentStore {
+        SQLiteSearchDocumentStore(storage: sqliteStorage)
     }
 }

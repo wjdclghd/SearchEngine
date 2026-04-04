@@ -76,10 +76,7 @@ public struct SearchEngineMigrationPlan: Equatable, Sendable {
     }
 
     /*
-     SearchEngine 기본 migration 정책입니다.
-
-     검색 엔진 내부 메타데이터 테이블을 준비하고,
-     버전 2 이상 migration을 순차적으로 이어갈 수 있도록 user_version 1을 기준점으로 사용합니다.
+     SearchEngine 초기 메타데이터 준비용 migration 정책입니다.
      */
     public static let sqliteCore = SearchEngineMigrationPlan(
         migrations: [
@@ -88,6 +85,22 @@ public struct SearchEngineMigrationPlan: Equatable, Sendable {
                 statements: [
                     SearchEngineMigrationSQL.createMetadataTable,
                     SearchEngineMigrationSQL.createMetadataUpdatedAtIndex
+                ]
+            )
+        ]
+    )
+
+    /*
+     SearchEngine 문서 색인 스키마까지 포함한 기본 migration 정책입니다.
+     */
+    public static let searchIndexing = SearchEngineMigrationPlan(
+        migrations: sqliteCore.migrations + [
+            Migration(
+                version: 2,
+                statements: [
+                    SearchEngineMigrationSQL.createDocumentsTable,
+                    SearchEngineMigrationSQL.createDocumentsScopeUpdatedAtIndex,
+                    SearchEngineMigrationSQL.createDocumentsFTSTable
                 ]
             )
         ]
@@ -271,17 +284,15 @@ private extension SearchEngineMigrationPlan {
      현재 SQLite user_version 값을 조회합니다.
 
      Parameters:
-     - databasePointer: user_version을 읽을 SQLite 연결 포인터
+     - databasePointer: user_version을 조회할 SQLite 연결 포인터
 
      Returns:
-     - 현재 데이터베이스의 user_version 값
+     - 현재 user_version 값
 
      Throws:
-     - user_version 조회에 실패하면 에러를 던집니다.
+     - user_version 조회에 실패하면 migrationFailed 에러를 던집니다.
      */
-    static func fetchUserVersion(
-        in databasePointer: OpaquePointer
-    ) throws -> Int32 {
+    static func fetchUserVersion(in databasePointer: OpaquePointer) throws -> Int32 {
         let statement = try prepareStatement(
             sql: "PRAGMA user_version;",
             in: databasePointer
@@ -290,7 +301,7 @@ private extension SearchEngineMigrationPlan {
 
         guard sqlite3_step(statement) == SQLITE_ROW else {
             throw SearchEngineError.migrationFailed(
-                message: "Unable to read PRAGMA user_version."
+                message: "Failed to read PRAGMA user_version. \(lastErrorMessage(from: databasePointer))"
             )
         }
 
@@ -298,14 +309,14 @@ private extension SearchEngineMigrationPlan {
     }
 
     /*
-     SQLite user_version 값을 지정한 버전으로 갱신합니다.
+     지정한 버전으로 SQLite user_version 값을 갱신합니다.
 
      Parameters:
-     - version: 기록할 migration version
+     - version: 기록할 target user_version
      - databasePointer: user_version을 갱신할 SQLite 연결 포인터
 
      Throws:
-     - user_version 갱신에 실패하면 에러를 던집니다.
+     - user_version 갱신에 실패하면 migrationFailed 에러를 던집니다.
      */
     static func setUserVersion(
         _ version: Int32,
@@ -329,24 +340,16 @@ private extension SearchEngineMigrationPlan {
      - databasePointer: SQL을 실행할 SQLite 연결 포인터
 
      Throws:
-     - SQL 실행에 실패하면 에러를 던집니다.
+     - migration SQL 실행에 실패하면 migrationFailed 에러를 던집니다.
      */
     static func executeMigrationStatement(
         _ sql: String,
         version: Int32,
         in databasePointer: OpaquePointer
     ) throws {
-        let trimmedSQL = sql.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        if trimmedSQL.isEmpty {
+        guard sqlite3_exec(databasePointer, sql, nil, nil, nil) == SQLITE_OK else {
             throw SearchEngineError.migrationFailed(
-                message: "Migration version \(version) contains an empty SQL statement."
-            )
-        }
-
-        guard sqlite3_exec(databasePointer, trimmedSQL, nil, nil, nil) == SQLITE_OK else {
-            throw SearchEngineError.migrationFailed(
-                message: "Failed to execute migration version \(version). sql: \(trimmedSQL). \(lastErrorMessage(from: databasePointer))"
+                message: "Failed to execute migration version \(version). sql: \(sql). \(lastErrorMessage(from: databasePointer))"
             )
         }
     }

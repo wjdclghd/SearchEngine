@@ -15,7 +15,7 @@ import XCTest
 
  아직 공개 검색 엔진 구현체를 만들지 않지만,
  컨테이너가 설정값을 보관하고 내부 SQLite foundation을 안정적으로 준비할 수 있어야
- indexing, search, suggest 계층 확장 시 같은 초기화 흐름을 재사용할 수 있습니다.
+ 문서 저장 구현체와 이후 기능 객체들이 같은 초기화 흐름을 재사용할 수 있습니다.
  */
 final class SearchEngineContainerTests: XCTestCase {
     /*
@@ -38,7 +38,7 @@ final class SearchEngineContainerTests: XCTestCase {
     /*
      컨테이너가 내부 SQLite 저장 foundation을 구성할 수 있는지 검증합니다.
 
-     이 foundation 위에 색인기와 검색 실행기를 조립하게 되므로,
+     이 foundation 위에 문서 저장 구현체와 검색 실행기를 조립하게 되므로,
      컨테이너 수준에서 공통 기반이 준비되는지 확인합니다.
 
      Throws:
@@ -68,8 +68,6 @@ final class SearchEngineContainerTests: XCTestCase {
 
         XCTAssertEqual(count, 1)
     }
-
-
 
     /*
      makeDefault가 기본 live 경로 규칙을 사용하는 컨테이너를 생성하는지 검증합니다.
@@ -136,4 +134,44 @@ final class SearchEngineContainerTests: XCTestCase {
         }
     }
 
+    /*
+     컨테이너가 SQLiteSearchDocumentStore를 조립할 수 있는지 검증합니다.
+
+     StoreImplementations 계층은 컨테이너가 준비한 공통 SQLite foundation을 재사용해야 하므로,
+     컨테이너가 내부 문서 저장 구현체를 안정적으로 생성하는지 확인합니다.
+
+     Throws:
+     - 테스트 과정에서 오류가 발생하면 에러를 던집니다.
+     */
+    func test_makeSQLiteSearchDocumentStore_returnsUsableStore() throws {
+        let container = try SearchEngineContainer.makeDefaultInMemory()
+        let documentStore = container.makeSQLiteSearchDocumentStore()
+
+        try documentStore.index(
+            SearchDocument(
+                id: "notice-1",
+                scope: SearchScope(rawValue: "notice"),
+                title: "SearchEngine",
+                body: "SQLite document store",
+                keywords: ["swift", "sqlite"],
+                lastUpdatedAt: Date(timeIntervalSince1970: 1)
+            )
+        )
+
+        let rowCount = try container.makeSQLiteStorage().read { databasePointer in
+            let statement = try SQLiteDatabase.prepareStatement(
+                sql: "SELECT COUNT(*) FROM \(SearchEngineMigrationSQL.documentsTableName);",
+                in: databasePointer
+            )
+            defer { SQLiteDatabase.finalizeStatement(statement) }
+
+            guard sqlite3_step(statement) == SQLITE_ROW else {
+                return 0
+            }
+
+            return Int(sqlite3_column_int(statement, 0))
+        }
+
+        XCTAssertEqual(rowCount, 1)
+    }
 }
