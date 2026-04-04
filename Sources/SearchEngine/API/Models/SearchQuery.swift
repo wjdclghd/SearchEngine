@@ -64,7 +64,7 @@ public struct SearchQuery: Equatable, Sendable {
 
      빈 검색어, 0 이하의 limit, 음수 offset, 빈 검색 범위는
      실제 Querying 계층에서 모호한 조건 분기를 만들기 쉬우므로
-     foundation 단계에서 명확한 오류로 차단합니다.
+     명확한 오류로 차단합니다.
 
      Throws:
      - 질의 값이 올바르지 않으면 SearchEngineError.invalidQuery

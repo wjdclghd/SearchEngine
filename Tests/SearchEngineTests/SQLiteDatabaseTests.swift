@@ -223,6 +223,269 @@ final class SQLiteDatabaseTests: XCTestCase {
 
         XCTAssertEqual(journalMode.lowercased(), "wal")
     }
+
+    /*
+     기본 migration plan이 데이터베이스 초기화 시 자동 적용되어 user_version과 메타데이터 테이블이 준비되는지 검증합니다.
+
+     기본 책임은
+     foundation 연결 생성만으로도 최소 schema version과 내부 메타데이터 구조를 일관되게 보장하는 것입니다.
+     이 테스트는 SQLiteDatabase 초기화 시 migration plan이 실제로 실행되는지 확인합니다.
+
+     Throws:
+     - 테스트 과정에서 오류가 발생하면 에러를 던집니다.
+     */
+    func test_init_appliesDefaultMigrationPlan() throws {
+        let database = try InMemorySQLiteDatabase.make()
+
+        let userVersion = try database.read { databasePointer in
+            let statement = try SQLiteDatabase.prepareStatement(
+                sql: "PRAGMA user_version;",
+                in: databasePointer
+            )
+            defer { SQLiteDatabase.finalizeStatement(statement) }
+
+            guard sqlite3_step(statement) == SQLITE_ROW else {
+                return -1
+            }
+
+            return Int(sqlite3_column_int(statement, 0))
+        }
+
+        let metadataTableCount = try database.read { databasePointer in
+            let statement = try SQLiteDatabase.prepareStatement(
+                sql: "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '\(SearchEngineMigrationSQL.metadataTableName)';",
+                in: databasePointer
+            )
+            defer { SQLiteDatabase.finalizeStatement(statement) }
+
+            guard sqlite3_step(statement) == SQLITE_ROW else {
+                return 0
+            }
+
+            return Int(sqlite3_column_int(statement, 0))
+        }
+
+        XCTAssertEqual(userVersion, 1)
+        XCTAssertEqual(metadataTableCount, 1)
+    }
+
+    /*
+     더 높은 migration plan으로 같은 디스크 데이터베이스를 다시 열면 pending migration만 적용되는지 검증합니다.
+
+     스키마가 누적 확장되는 전제를 가지므로,
+     이미 version 1까지 적용된 저장소를 version 2 plan으로 다시 열었을 때
+     새 migration만 추가로 반영되고 user_version이 올바르게 갱신되어야 합니다.
+
+     Throws:
+     - 테스트 과정에서 오류가 발생하면 에러를 던집니다.
+     */
+    func test_init_withExpandedMigrationPlan_appliesPendingMigrationsOnly() throws {
+        let temporaryBaseDirectoryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let expandedTableName = "migration_v2_records"
+
+        addTeardownBlock {
+            try? FileManager.default.removeItem(at: temporaryBaseDirectoryURL)
+        }
+
+        let initialConfiguration = try SearchEngineConfiguration.live(
+            directoryName: "SearchEngine",
+            fileName: "SearchEngine.sqlite",
+            baseDirectoryURL: temporaryBaseDirectoryURL,
+            migrationPlan: .sqliteCore,
+            enablesWriteAheadLogging: false,
+            enablesForeignKeys: true
+        )
+        _ = try SQLiteDatabase(configuration: initialConfiguration)
+
+        let expandedMigrationPlan = SearchEngineMigrationPlan(
+            migrations: SearchEngineMigrationPlan.sqliteCore.migrations + [
+                .init(
+                    version: 2,
+                    statements: [
+                        "CREATE TABLE IF NOT EXISTS \(expandedTableName) (id TEXT PRIMARY KEY);"
+                    ]
+                )
+            ]
+        )
+        let expandedConfiguration = try SearchEngineConfiguration.live(
+            directoryName: "SearchEngine",
+            fileName: "SearchEngine.sqlite",
+            baseDirectoryURL: temporaryBaseDirectoryURL,
+            migrationPlan: expandedMigrationPlan,
+            enablesWriteAheadLogging: false,
+            enablesForeignKeys: true
+        )
+        let database = try SQLiteDatabase(configuration: expandedConfiguration)
+
+        let userVersion = try database.read { databasePointer in
+            let statement = try SQLiteDatabase.prepareStatement(
+                sql: "PRAGMA user_version;",
+                in: databasePointer
+            )
+            defer { SQLiteDatabase.finalizeStatement(statement) }
+
+            guard sqlite3_step(statement) == SQLITE_ROW else {
+                return -1
+            }
+
+            return Int(sqlite3_column_int(statement, 0))
+        }
+
+        let expandedTableCount = try database.read { databasePointer in
+            let statement = try SQLiteDatabase.prepareStatement(
+                sql: "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '\(expandedTableName)';",
+                in: databasePointer
+            )
+            defer { SQLiteDatabase.finalizeStatement(statement) }
+
+            guard sqlite3_step(statement) == SQLITE_ROW else {
+                return 0
+            }
+
+            return Int(sqlite3_column_int(statement, 0))
+        }
+
+        XCTAssertEqual(userVersion, 2)
+        XCTAssertEqual(expandedTableCount, 1)
+    }
+
+
+    /*
+     migration SQL 실행이 실패하면 초기화가 migrationFailed로 종료되고 schema 변경이 rollback 되는지 검증합니다.
+
+     Throws:
+     - 테스트 과정에서 오류가 발생하면 에러를 던집니다.
+     */
+    func test_init_whenMigrationStatementFails_rollsBackAndThrowsMigrationFailed() throws {
+        let temporaryBaseDirectoryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let rollbackTableName = "rollback_items"
+        let invalidMigrationPlan = SearchEngineMigrationPlan(
+            migrations: [
+                .init(
+                    version: 1,
+                    statements: [
+                        "CREATE TABLE \(rollbackTableName) (id TEXT PRIMARY KEY);",
+                        "INVALID SQL"
+                    ]
+                )
+            ]
+        )
+
+        addTeardownBlock {
+            try? FileManager.default.removeItem(at: temporaryBaseDirectoryURL)
+        }
+
+        let configuration = try SearchEngineConfiguration.live(
+            directoryName: "SearchEngine",
+            fileName: "SearchEngine.sqlite",
+            baseDirectoryURL: temporaryBaseDirectoryURL,
+            migrationPlan: invalidMigrationPlan,
+            enablesWriteAheadLogging: false,
+            enablesForeignKeys: true
+        )
+
+        XCTAssertThrowsError(
+            try SQLiteDatabase(configuration: configuration)
+        ) { error in
+            guard case let SearchEngineError.migrationFailed(message) = error else {
+                return XCTFail("Expected migrationFailed, got \(error)")
+            }
+
+            XCTAssertFalse(message.isEmpty)
+        }
+
+        let inspectionConfiguration = try SearchEngineConfiguration.live(
+            directoryName: "SearchEngine",
+            fileName: "SearchEngine.sqlite",
+            baseDirectoryURL: temporaryBaseDirectoryURL,
+            migrationPlan: .disabled,
+            enablesWriteAheadLogging: false,
+            enablesForeignKeys: true
+        )
+        let inspectionDatabase = try SQLiteDatabase(configuration: inspectionConfiguration)
+
+        let userVersion = try inspectionDatabase.read { databasePointer in
+            let statement = try SQLiteDatabase.prepareStatement(
+                sql: "PRAGMA user_version;",
+                in: databasePointer
+            )
+            defer { SQLiteDatabase.finalizeStatement(statement) }
+
+            guard sqlite3_step(statement) == SQLITE_ROW else {
+                return -1
+            }
+
+            return Int(sqlite3_column_int(statement, 0))
+        }
+
+        let rollbackTableCount = try inspectionDatabase.read { databasePointer in
+            let statement = try SQLiteDatabase.prepareStatement(
+                sql: "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '\(rollbackTableName)';",
+                in: databasePointer
+            )
+            defer { SQLiteDatabase.finalizeStatement(statement) }
+
+            guard sqlite3_step(statement) == SQLITE_ROW else {
+                return 0
+            }
+
+            return Int(sqlite3_column_int(statement, 0))
+        }
+
+        XCTAssertEqual(userVersion, 0)
+        XCTAssertEqual(rollbackTableCount, 0)
+    }
+
+    /*
+     disabled migration plan을 사용하면 schema 변경과 user_version 갱신이 수행되지 않는지 검증합니다.
+
+     Throws:
+     - 테스트 과정에서 오류가 발생하면 에러를 던집니다.
+     */
+    func test_disabledMigrationPlan_doesNotApplySchemaChanges() throws {
+        let configuration = SearchEngineConfiguration.inMemory(
+            identifier: UUID().uuidString,
+            migrationPlan: .disabled,
+            busyTimeoutMilliseconds: SearchEngineConfiguration.defaultBusyTimeoutMilliseconds,
+            enablesWriteAheadLogging: false,
+            enablesForeignKeys: true
+        )
+        let database = try SQLiteDatabase(configuration: configuration)
+
+        let userVersion = try database.read { databasePointer in
+            let statement = try SQLiteDatabase.prepareStatement(
+                sql: "PRAGMA user_version;",
+                in: databasePointer
+            )
+            defer { SQLiteDatabase.finalizeStatement(statement) }
+
+            guard sqlite3_step(statement) == SQLITE_ROW else {
+                return -1
+            }
+
+            return Int(sqlite3_column_int(statement, 0))
+        }
+
+        let metadataTableCount = try database.read { databasePointer in
+            let statement = try SQLiteDatabase.prepareStatement(
+                sql: "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '\(SearchEngineMigrationSQL.metadataTableName)';",
+                in: databasePointer
+            )
+            defer { SQLiteDatabase.finalizeStatement(statement) }
+
+            guard sqlite3_step(statement) == SQLITE_ROW else {
+                return 0
+            }
+
+            return Int(sqlite3_column_int(statement, 0))
+        }
+
+        XCTAssertEqual(userVersion, 0)
+        XCTAssertEqual(metadataTableCount, 0)
+    }
+
 }
 
 private extension SQLiteDatabaseTests {

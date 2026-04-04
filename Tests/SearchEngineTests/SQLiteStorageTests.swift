@@ -13,9 +13,9 @@ import XCTest
 /*
  SQLiteStorage의 기본 읽기/쓰기 및 트랜잭션 동작을 검증하는 테스트입니다.
 
- sqlite-core 단계에서는 아직 실제 검색 엔진 구현이 없으므로,
+ 아직 실제 검색 엔진 구현이 없으므로,
  저장 foundation이 안전한 SQL 실행과 트랜잭션 롤백을 제공하는지 먼저 확인해두어야
- 이후 Indexing, Querying 계층이 같은 기반을 신뢰하고 확장할 수 있습니다.
+ Indexing, Querying 계층이 같은 기반을 신뢰하고 확장할 수 있습니다.
  */
 final class SQLiteStorageTests: XCTestCase {
     /*

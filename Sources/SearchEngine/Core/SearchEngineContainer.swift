@@ -14,8 +14,7 @@ import Foundation
  컨테이너는 검색 엔진 초기화에 필요한 설정과 SQLite 기반 저장 foundation을 보관하고,
  이후 색인기, 검색 실행기, 제안 생성기 같은 기능 객체를 구성하는 기반 역할을 담당합니다.
 
- sqlite-core 단계에서는 아직 공개 엔진 구현체를 직접 생성하지 않지만,
- 이후 indexing, search, suggest, rebuild 브랜치에서
+ 아직 공개 엔진 구현체를 직접 생성하지 않지만,
  동일한 초기화 흐름 위에 기능 조립을 확장할 수 있도록 컨테이너 구조를 먼저 마련합니다.
  */
 public final class SearchEngineContainer {
@@ -100,8 +99,8 @@ public final class SearchEngineContainer {
     /*
      현재 컨테이너가 보관 중인 SQLite 저장 foundation을 반환합니다.
 
-     sqlite-core 단계에서는 SearchEngine 공개 구현체 대신
-     내부 저장 foundation을 기반으로 테스트와 이후 기능 조립을 진행합니다.
+     현재는 SearchEngine 공개 구현체 대신
+     내부 저장 foundation을 기반으로 테스트와 기능 조립을 진행합니다.
 
      Returns:
      - SearchEngine 내부에서 사용할 SQLite 저장 foundation 구현체

@@ -82,6 +82,13 @@ public enum SearchEngineError: Error, Equatable, LocalizedError, Sendable {
     case statementBindingFailed(index: Int32, message: String)
 
     /*
+     마이그레이션 실행에 실패했을 때 발생합니다.
+
+     - Parameter String: migration plan 검증 실패, 버전 불일치, SQL 적용 실패 원인을 설명하는 메시지입니다.
+    */
+    case migrationFailed(message: String)
+
+    /*
      읽기 작업에 실패했을 때 발생합니다.
 
      - Parameter String: 읽기 작업 실패 원인을 설명하는 메시지입니다.
@@ -133,6 +140,9 @@ public enum SearchEngineError: Error, Equatable, LocalizedError, Sendable {
 
         case let .statementBindingFailed(index, message):
             return "SQL statement 바인딩에 실패했습니다. index: \(index), \(message)"
+
+        case let .migrationFailed(message):
+            return "SQLite migration 실행에 실패했습니다. \(message)"
 
         case let .readFailed(message):
             return "읽기 작업에 실패했습니다. \(message)"

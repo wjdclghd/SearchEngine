@@ -10,13 +10,14 @@ import Foundation
 /*
  SearchEngine 초기화에 필요한 설정 값을 한 곳에 모은 구성 객체입니다.
 
- SQLite 저장 경로, busy timeout, WAL 사용 여부, foreign key 사용 여부를
+ SQLite 저장 경로, migration plan, busy timeout, WAL 사용 여부, foreign key 사용 여부를
  함께 관리하여 데이터베이스 초기화 흐름을 일관되게 유지합니다.
 
  역할
  - live / in-memory 환경별 기본 설정 제공
  - SQLite 파일 경로 계산
- - foundation 단계에서 필요한 설정값 검증
+ - migration plan 보관 및 검증
+ - 필요한 설정값 검증
 
  담당하지 않는 역할
  - 실제 데이터베이스 연결 열기
@@ -67,6 +68,11 @@ public struct SearchEngineConfiguration: Equatable, Sendable {
     public let storage: Storage
 
     /*
+     데이터베이스 초기화 시 적용할 migration 계획입니다.
+     */
+    public let migrationPlan: SearchEngineMigrationPlan
+
+    /*
      SQLite busy timeout 값입니다.
      */
     public let busyTimeoutMilliseconds: Int32
@@ -86,17 +92,20 @@ public struct SearchEngineConfiguration: Equatable, Sendable {
 
      Parameters:
      - storage: 데이터베이스 저장 위치
+     - migrationPlan: 데이터베이스 초기화 시 적용할 migration 계획
      - busyTimeoutMilliseconds: SQLite busy timeout 값
      - enablesWriteAheadLogging: WAL 모드 사용 여부
      - enablesForeignKeys: foreign key 사용 여부
      */
     public init(
         storage: Storage,
+        migrationPlan: SearchEngineMigrationPlan = .sqliteCore,
         busyTimeoutMilliseconds: Int32 = SearchEngineConfiguration.defaultBusyTimeoutMilliseconds,
         enablesWriteAheadLogging: Bool = true,
         enablesForeignKeys: Bool = true
     ) {
         self.storage = storage
+        self.migrationPlan = migrationPlan
         self.busyTimeoutMilliseconds = busyTimeoutMilliseconds
         self.enablesWriteAheadLogging = enablesWriteAheadLogging
         self.enablesForeignKeys = enablesForeignKeys
@@ -107,12 +116,13 @@ public struct SearchEngineConfiguration: Equatable, Sendable {
 
      기본 운영 환경에서 사용할 SearchEngine 설정을 간단히 만들 수 있는 편의 메서드입니다.
      경로 계산과 필수 문자열 검증을 먼저 수행하여,
-     실제 데이터베이스 초기화 단계에서 모호한 파일 시스템 오류를 줄입니다.
+     실제 데이터베이스 초기화 시 모호한 파일 시스템 오류를 줄입니다.
 
      Parameters:
      - directoryName: SQLite 파일을 저장할 디렉터리 이름
      - fileName: SQLite 파일 이름
      - baseDirectoryURL: 기준 디렉터리 URL
+     - migrationPlan: 데이터베이스 초기화 시 적용할 migration 계획
      - busyTimeoutMilliseconds: SQLite busy timeout 값
      - enablesWriteAheadLogging: WAL 모드 사용 여부
      - enablesForeignKeys: foreign key 사용 여부
@@ -127,6 +137,7 @@ public struct SearchEngineConfiguration: Equatable, Sendable {
         directoryName: String = SearchEngineConfiguration.defaultDirectoryName,
         fileName: String = SearchEngineConfiguration.defaultFileName,
         baseDirectoryURL: URL? = nil,
+        migrationPlan: SearchEngineMigrationPlan = .sqliteCore,
         busyTimeoutMilliseconds: Int32 = SearchEngineConfiguration.defaultBusyTimeoutMilliseconds,
         enablesWriteAheadLogging: Bool = true,
         enablesForeignKeys: Bool = true
@@ -137,6 +148,7 @@ public struct SearchEngineConfiguration: Equatable, Sendable {
                 fileName: fileName,
                 baseDirectoryURL: baseDirectoryURL
             ),
+            migrationPlan: migrationPlan,
             busyTimeoutMilliseconds: busyTimeoutMilliseconds,
             enablesWriteAheadLogging: enablesWriteAheadLogging,
             enablesForeignKeys: enablesForeignKeys
@@ -155,6 +167,7 @@ public struct SearchEngineConfiguration: Equatable, Sendable {
 
      Parameters:
      - identifier: in-memory 데이터베이스 식별자
+     - migrationPlan: 데이터베이스 초기화 시 적용할 migration 계획
      - busyTimeoutMilliseconds: SQLite busy timeout 값
      - enablesWriteAheadLogging: WAL 모드 사용 여부
      - enablesForeignKeys: foreign key 사용 여부
@@ -164,12 +177,14 @@ public struct SearchEngineConfiguration: Equatable, Sendable {
      */
     public static func inMemory(
         identifier: String = "SearchEngine.InMemory",
+        migrationPlan: SearchEngineMigrationPlan = .sqliteCore,
         busyTimeoutMilliseconds: Int32 = SearchEngineConfiguration.defaultBusyTimeoutMilliseconds,
         enablesWriteAheadLogging: Bool = false,
         enablesForeignKeys: Bool = true
     ) -> SearchEngineConfiguration {
         SearchEngineConfiguration(
             storage: .inMemory(identifier: identifier),
+            migrationPlan: migrationPlan,
             busyTimeoutMilliseconds: busyTimeoutMilliseconds,
             enablesWriteAheadLogging: enablesWriteAheadLogging,
             enablesForeignKeys: enablesForeignKeys
@@ -242,6 +257,8 @@ public struct SearchEngineConfiguration: Equatable, Sendable {
      - 구성 값이 잘못되었으면 에러를 던집니다.
      */
     public func validate() throws {
+        try migrationPlan.validate()
+
         if busyTimeoutMilliseconds < 0 {
             throw SearchEngineError.invalidConfiguration(
                 message: "busyTimeoutMilliseconds must be greater than or equal to zero."
