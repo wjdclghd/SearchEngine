@@ -99,7 +99,7 @@ public struct SearchEngineConfiguration: Equatable, Sendable {
      */
     public init(
         storage: Storage,
-        migrationPlan: SearchEngineMigrationPlan = .sqliteCore,
+        migrationPlan: SearchEngineMigrationPlan = .searchIndexing,
         busyTimeoutMilliseconds: Int32 = SearchEngineConfiguration.defaultBusyTimeoutMilliseconds,
         enablesWriteAheadLogging: Bool = true,
         enablesForeignKeys: Bool = true
@@ -137,7 +137,7 @@ public struct SearchEngineConfiguration: Equatable, Sendable {
         directoryName: String = SearchEngineConfiguration.defaultDirectoryName,
         fileName: String = SearchEngineConfiguration.defaultFileName,
         baseDirectoryURL: URL? = nil,
-        migrationPlan: SearchEngineMigrationPlan = .sqliteCore,
+        migrationPlan: SearchEngineMigrationPlan = .searchIndexing,
         busyTimeoutMilliseconds: Int32 = SearchEngineConfiguration.defaultBusyTimeoutMilliseconds,
         enablesWriteAheadLogging: Bool = true,
         enablesForeignKeys: Bool = true
@@ -177,7 +177,7 @@ public struct SearchEngineConfiguration: Equatable, Sendable {
      */
     public static func inMemory(
         identifier: String = "SearchEngine.InMemory",
-        migrationPlan: SearchEngineMigrationPlan = .sqliteCore,
+        migrationPlan: SearchEngineMigrationPlan = .searchIndexing,
         busyTimeoutMilliseconds: Int32 = SearchEngineConfiguration.defaultBusyTimeoutMilliseconds,
         enablesWriteAheadLogging: Bool = false,
         enablesForeignKeys: Bool = true

@@ -8,6 +8,8 @@
 import Foundation
 @testable import SearchEngine
 
+@testable import SearchEngine
+
 /*
  테스트 전용 in-memory SQLiteDatabase 생성 도우미입니다.
 

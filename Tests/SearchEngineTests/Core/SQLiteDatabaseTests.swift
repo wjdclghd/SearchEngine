@@ -265,7 +265,7 @@ final class SQLiteDatabaseTests: XCTestCase {
             return Int(sqlite3_column_int(statement, 0))
         }
 
-        XCTAssertEqual(userVersion, 1)
+        XCTAssertEqual(userVersion, 2)
         XCTAssertEqual(metadataTableCount, 1)
     }
 

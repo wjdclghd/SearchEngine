@@ -27,6 +27,21 @@ enum SearchEngineMigrationSQL {
     static let metadataUpdatedAtIndexName = "idx_search_engine_metadata_updated_at"
 
     /*
+     SearchEngine 원본 문서 저장 테이블 이름입니다.
+     */
+    static let documentsTableName = "search_documents"
+
+    /*
+     SearchEngine 문서 범위/갱신 시각 인덱스 이름입니다.
+     */
+    static let documentsScopeUpdatedAtIndexName = "idx_search_documents_scope_updated_at"
+
+    /*
+     SearchEngine FTS5 문서 projection 테이블 이름입니다.
+     */
+    static let documentsFTSTableName = "search_documents_fts"
+
+    /*
      SearchEngine 내부 메타데이터 테이블 생성 SQL입니다.
 
      검색 엔진 공통 메타데이터, 향후 schema 관련 부가 값,
@@ -46,5 +61,49 @@ enum SearchEngineMigrationSQL {
     static let createMetadataUpdatedAtIndex = """
     CREATE INDEX IF NOT EXISTS \(metadataUpdatedAtIndexName)
     ON \(metadataTableName) (updated_at DESC);
+    """
+
+    /*
+     검색 문서 원본 저장 테이블 생성 SQL입니다.
+
+     색인 원본 문서를 안정적으로 보관하고,
+     이후 검색 결과 복원과 재색인 동작의 기준 데이터로 사용합니다.
+     */
+    static let createDocumentsTable = """
+    CREATE TABLE IF NOT EXISTS \(documentsTableName) (
+        id TEXT PRIMARY KEY,
+        scope TEXT NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        keywords TEXT NOT NULL,
+        last_updated_at REAL NOT NULL
+    );
+    """
+
+    /*
+     검색 범위와 최신성 정렬을 위한 인덱스 생성 SQL입니다.
+     */
+    static let createDocumentsScopeUpdatedAtIndex = """
+    CREATE INDEX IF NOT EXISTS \(documentsScopeUpdatedAtIndexName)
+    ON \(documentsTableName) (scope, last_updated_at DESC);
+    """
+
+    /*
+     FTS5 기반 문서 projection 테이블 생성 SQL입니다.
+
+     title, body, keywords를 검색 대상으로 사용하고,
+     id와 scope는 원본 문서 복원과 범위 필터링을 위한 보조 컬럼으로 함께 저장합니다.
+     */
+    static let createDocumentsFTSTable = """
+    CREATE VIRTUAL TABLE IF NOT EXISTS \(documentsFTSTableName)
+    USING fts5(
+        id UNINDEXED,
+        scope UNINDEXED,
+        title,
+        body,
+        keywords,
+        tokenize = 'unicode61',
+        prefix = '2 3 4'
+    );
     """
 }

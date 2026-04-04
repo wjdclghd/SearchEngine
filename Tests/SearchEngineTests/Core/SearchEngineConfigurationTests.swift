@@ -248,8 +248,8 @@ final class SearchEngineConfigurationTests: XCTestCase {
             baseDirectoryURL: temporaryDirectoryURL
         )
 
-        XCTAssertEqual(configuration.migrationPlan, .sqliteCore)
-        XCTAssertEqual(configuration.migrationPlan.latestVersion, 1)
+        XCTAssertEqual(configuration.migrationPlan, .searchIndexing)
+        XCTAssertEqual(configuration.migrationPlan.latestVersion, 2)
     }
 
     /*
