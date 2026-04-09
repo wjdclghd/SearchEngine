@@ -174,4 +174,37 @@ final class SearchEngineContainerTests: XCTestCase {
 
         XCTAssertEqual(rowCount, 1)
     }
+
+
+    /*
+     컨테이너가 SQLiteSearchSuggestionStore를 조립할 수 있는지 검증합니다.
+
+     Suggest 계층도 같은 SQLite foundation을 재사용해야 하므로,
+     컨테이너가 내부 제안 생성 구현체를 안정적으로 생성하는지 확인합니다.
+
+     Throws:
+     - 테스트 과정에서 오류가 발생하면 에러를 던집니다.
+     */
+    func test_makeSQLiteSearchSuggestionStore_returnsUsableStore() throws {
+        let container = try SearchEngineContainer.makeDefaultInMemory()
+        let documentStore = container.makeSQLiteSearchDocumentStore()
+        let suggestionStore = container.makeSQLiteSearchSuggestionStore()
+
+        try documentStore.index(
+            SearchDocument(
+                id: "notice-1",
+                scope: SearchScope(rawValue: "notice"),
+                title: "Swift Search",
+                body: "SQLite suggestion store",
+                keywords: ["swift", "sqlite"],
+                lastUpdatedAt: Date(timeIntervalSince1970: 1)
+            )
+        )
+
+        let suggestions = try suggestionStore.suggest(
+            SearchSuggestionQuery(text: "swift")
+        )
+
+        XCTAssertEqual(suggestions.map(\.text), ["Swift Search"])
+    }
 }
