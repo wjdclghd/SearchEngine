@@ -147,4 +147,17 @@ public final class SearchEngineContainer {
     func makeSQLiteSearchSuggestionStore() -> SQLiteSearchSuggestionStore {
         SQLiteSearchSuggestionStore(storage: sqliteStorage)
     }
+
+    /*
+     현재 컨테이너 설정으로 SearchRebuilder를 생성합니다.
+
+     projection rebuild 구현체도 같은 SQLite foundation과 migration 기준 위에서 동작해야 하므로,
+     컨테이너는 복구용 rebuild 조립 진입점도 함께 제공합니다.
+
+     Returns:
+     - 현재 컨테이너 기반으로 조립된 SearchRebuilder
+     */
+    func makeSearchRebuilder() -> SearchRebuilder {
+        SearchRebuilder(storage: sqliteStorage)
+    }
 }
