@@ -65,6 +65,24 @@ final class SearchSuggestionQueryTests: XCTestCase {
     }
 
     /*
+     limit이 최대 허용값을 초과하면 invalidQuery를 반환하는지 검증합니다.
+     */
+    func test_validate_withLimitGreaterThanMaximum_throwsInvalidQuery() {
+        let query = SearchSuggestionQuery(
+            text: "swift",
+            limit: SearchSuggestionQuery.maximumLimit + 1
+        )
+
+        XCTAssertThrowsError(try query.validate()) { error in
+            guard case let SearchEngineError.invalidQuery(message) = error else {
+                return XCTFail("Expected invalidQuery, got \(error)")
+            }
+
+            XCTAssertFalse(message.isEmpty)
+        }
+    }
+
+    /*
      유효한 SearchSuggestionQuery는 검증을 통과하는지 검증합니다.
      */
     func test_validate_withValidQuery_succeeds() {
