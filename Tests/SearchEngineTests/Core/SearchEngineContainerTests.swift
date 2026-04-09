@@ -207,4 +207,42 @@ final class SearchEngineContainerTests: XCTestCase {
 
         XCTAssertEqual(suggestions.map(\.text), ["Swift Search"])
     }
+
+
+    /*
+     컨테이너가 SearchRebuilder를 조립할 수 있는지 검증합니다.
+
+     Rebuilder도 같은 SQLite foundation을 재사용해야 하므로,
+     컨테이너가 projection 복구 구현체를 안정적으로 생성하는지 확인합니다.
+
+     Throws:
+     - 테스트 과정에서 오류가 발생하면 에러를 던집니다.
+     */
+    func test_makeSearchRebuilder_returnsUsableRebuilder() throws {
+        let container = try SearchEngineContainer.makeDefaultInMemory()
+        let documentStore = container.makeSQLiteSearchDocumentStore()
+        let rebuilder = container.makeSearchRebuilder()
+        let searchStore = container.makeSQLiteSearchStore()
+
+        try documentStore.index(
+            SearchDocument(
+                id: "notice-1",
+                scope: SearchScope(rawValue: "notice"),
+                title: "Swift Search",
+                body: "SQLite rebuild",
+                keywords: ["swift", "sqlite"],
+                lastUpdatedAt: Date(timeIntervalSince1970: 1)
+            )
+        )
+        try container.makeSQLiteStorage().execute(
+            sql: "DELETE FROM \(SearchEngineMigrationSQL.documentsFTSTableName);"
+        )
+
+        try rebuilder.rebuild()
+
+        XCTAssertEqual(
+            try searchStore.search(SearchQuery(text: "swift")).map(\.document.title),
+            ["Swift Search"]
+        )
+    }
 }
