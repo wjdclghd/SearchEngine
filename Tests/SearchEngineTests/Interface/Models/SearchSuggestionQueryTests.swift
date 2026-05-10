@@ -9,19 +9,13 @@ import Foundation
 import XCTest
 @testable import SearchEngine
 
-/*
- SearchSuggestionQuery의 검증 동작을 확인하는 테스트입니다.
-
- 제안 생성 이전에 빈 입력값, 범위 오류, 잘못된 limit가 차단되면,
- 이후 Suggest 계층에서 불필요한 방어 로직을 줄일 수 있습니다.
- */
+/// SearchSuggestionQuery의 검증 동작을 확인하는 테스트입니다.
 final class SearchSuggestionQueryTests: XCTestCase {
-    /*
-     입력 문자열이 비어 있는 SearchSuggestionQuery는 invalidQuery를 반환하는지 검증합니다.
-     */
     func test_validate_withEmptyText_throwsInvalidQuery() {
+        // given / when
         let query = SearchSuggestionQuery(text: "   ")
 
+        // then
         XCTAssertThrowsError(try query.validate()) { error in
             guard case let SearchEngineError.invalidQuery(message) = error else {
                 return XCTFail("Expected invalidQuery, got \(error)")
@@ -31,15 +25,14 @@ final class SearchSuggestionQueryTests: XCTestCase {
         }
     }
 
-    /*
-     scope가 비어 있는 SearchSuggestionQuery는 invalidQuery를 반환하는지 검증합니다.
-     */
     func test_validate_withEmptyScope_throwsInvalidQuery() {
+        // given / when
         let query = SearchSuggestionQuery(
             text: "swift",
             scope: SearchScope(rawValue: "  ")
         )
 
+        // then
         XCTAssertThrowsError(try query.validate()) { error in
             guard case let SearchEngineError.invalidQuery(message) = error else {
                 return XCTFail("Expected invalidQuery, got \(error)")
@@ -49,12 +42,11 @@ final class SearchSuggestionQueryTests: XCTestCase {
         }
     }
 
-    /*
-     limit이 0 이하인 SearchSuggestionQuery는 invalidQuery를 반환하는지 검증합니다.
-     */
     func test_validate_withNonPositiveLimit_throwsInvalidQuery() {
+        // given / when
         let query = SearchSuggestionQuery(text: "swift", limit: 0)
 
+        // then
         XCTAssertThrowsError(try query.validate()) { error in
             guard case let SearchEngineError.invalidQuery(message) = error else {
                 return XCTFail("Expected invalidQuery, got \(error)")
@@ -64,15 +56,14 @@ final class SearchSuggestionQueryTests: XCTestCase {
         }
     }
 
-    /*
-     limit이 최대 허용값을 초과하면 invalidQuery를 반환하는지 검증합니다.
-     */
     func test_validate_withLimitGreaterThanMaximum_throwsInvalidQuery() {
+        // given / when
         let query = SearchSuggestionQuery(
             text: "swift",
             limit: SearchSuggestionQuery.maximumLimit + 1
         )
 
+        // then
         XCTAssertThrowsError(try query.validate()) { error in
             guard case let SearchEngineError.invalidQuery(message) = error else {
                 return XCTFail("Expected invalidQuery, got \(error)")
@@ -82,16 +73,15 @@ final class SearchSuggestionQueryTests: XCTestCase {
         }
     }
 
-    /*
-     유효한 SearchSuggestionQuery는 검증을 통과하는지 검증합니다.
-     */
     func test_validate_withValidQuery_succeeds() {
+        // given / when
         let query = SearchSuggestionQuery(
             text: "swift",
             scope: SearchScope(rawValue: "app"),
             limit: 10
         )
 
+        // then
         XCTAssertNoThrow(try query.validate())
     }
 }

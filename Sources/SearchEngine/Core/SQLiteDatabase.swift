@@ -8,44 +8,17 @@
 import Foundation
 import SQLite3
 
-/*
- SQLite3 연결을 직접 관리하는 SearchEngine의 foundation 구현체입니다.
-
- 이 타입은 SearchEngineConfiguration을 기반으로 데이터베이스를 열고,
- busy timeout, WAL, foreign key 같은 공통 pragma를 적용한 뒤 migration plan을 수행합니다.
-
- 담당 역할
- - SQLite 연결 열기와 종료
- - in-memory / disk 저장소별 connection string 결정
- - busy timeout, WAL, foreign key pragma 적용
- - migration plan 실행 및 user_version 갱신
- - 읽기, 쓰기, 트랜잭션 실행 직렬화
- - statement 준비와 오류 메시지 유틸 제공
-
- 담당하지 않는 역할
- - 색인 스키마 설계
- - 문서 매핑
- - 검색 / 제안 쿼리 조립
-
- 위와 같은 세부 로직은 상위 SearchEngine 계층에서 담당하고,
- 이 타입은 저수준 SQLite foundation을 안정적으로 유지하는 역할에 집중합니다.
- */
+/// SQLite3 연결을 직접 관리하는 SearchEngine의 기반 구현체입니다.
 final class SQLiteDatabase: SQLiteDatabaseProtocol {
-    /*
-     데이터베이스 구성 값입니다.
-     */
+    /// 데이터베이스 구성 값입니다.
     let configuration: SearchEngineConfiguration
 
-    /*
-     SQLite 데이터베이스 연결 포인터입니다.
-     */
+    /// SQLite 데이터베이스 연결 포인터입니다.
     private let databasePointer: OpaquePointer
 
-    /*
-     SQLite 접근 직렬화를 위한 lock입니다.
-
-     하나의 연결을 기준으로 읽기, 쓰기, 트랜잭션 경로를 일관되게 보호하기 위해 사용합니다.
-     */
+    /// SQLite 접근 직렬화를 위한 lock입니다.
+    ///
+    /// 하나의 연결을 기준으로 읽기, 쓰기, 트랜잭션 경로를 일관되게 보호하기 위해 사용합니다.
     private let lock = NSRecursiveLock()
 
     init(configuration: SearchEngineConfiguration) throws {
@@ -71,15 +44,11 @@ final class SQLiteDatabase: SQLiteDatabaseProtocol {
         sqlite3_close_v2(databasePointer)
     }
 
-    /*
-     SQL 한 문장을 직접 실행합니다.
-
-     Parameters:
-     - sql: 실행할 SQL 문자열
-
-     Throws:
-     - SQL 실행에 실패하면 에러를 던집니다.
-     */
+    /// SQL 한 문장을 직접 실행합니다.
+    ///
+    /// - Parameter sql: 실행할 SQL 문자열입니다.
+    ///
+    /// - Throws: SQL 실행에 실패하면 에러를 던집니다.
     func execute(sql: String) throws {
         let trimmedSQL = sql.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -100,18 +69,13 @@ final class SQLiteDatabase: SQLiteDatabaseProtocol {
         }
     }
 
-    /*
-     읽기 작업을 수행합니다.
-
-     Parameters:
-     - operation: SQLite 연결 포인터를 받아 읽기 작업을 수행하는 클로저
-
-     Returns:
-     - 읽기 작업 결과 값
-
-     Throws:
-     - 읽기 작업에 실패하면 에러를 던집니다.
-     */
+    /// 읽기 작업을 수행합니다.
+    ///
+    /// - Parameter operation: SQLite 연결 포인터를 받아 읽기 작업을 수행하는 클로저입니다.
+    ///
+    /// - Returns: 읽기 작업 결과 값입니다.
+    ///
+    /// - Throws: 읽기 작업에 실패하면 에러를 던집니다.
     func read<T>(_ operation: (OpaquePointer) throws -> T) throws -> T {
         try performLockedOperation(
             defaultErrorTransform: { SearchEngineError.readFailed(message: $0.localizedDescription) },
@@ -119,18 +83,13 @@ final class SQLiteDatabase: SQLiteDatabaseProtocol {
         )
     }
 
-    /*
-     쓰기 작업을 수행합니다.
-
-     Parameters:
-     - operation: SQLite 연결 포인터를 받아 쓰기 작업을 수행하는 클로저
-
-     Returns:
-     - 쓰기 작업 결과 값
-
-     Throws:
-     - 쓰기 작업에 실패하면 에러를 던집니다.
-     */
+    /// 쓰기 작업을 수행합니다.
+    ///
+    /// - Parameter operation: SQLite 연결 포인터를 받아 쓰기 작업을 수행하는 클로저입니다.
+    ///
+    /// - Returns: 쓰기 작업 결과 값입니다.
+    ///
+    /// - Throws: 쓰기 작업에 실패하면 에러를 던집니다.
     func write<T>(_ operation: (OpaquePointer) throws -> T) throws -> T {
         try performLockedOperation(
             defaultErrorTransform: { SearchEngineError.writeFailed(message: $0.localizedDescription) },
@@ -138,18 +97,13 @@ final class SQLiteDatabase: SQLiteDatabaseProtocol {
         )
     }
 
-    /*
-     트랜잭션 안에서 작업을 수행합니다.
-
-     Parameters:
-     - operation: SQLite 연결 포인터를 받아 트랜잭션 작업을 수행하는 클로저
-
-     Returns:
-     - 트랜잭션 작업 결과 값
-
-     Throws:
-     - 트랜잭션 실행에 실패하면 에러를 던집니다.
-     */
+    /// 트랜잭션 안에서 작업을 수행합니다.
+    ///
+    /// - Parameter operation: SQLite 연결 포인터를 받아 트랜잭션 작업을 수행하는 클로저입니다.
+    ///
+    /// - Returns: 트랜잭션 작업 결과 값입니다.
+    ///
+    /// - Throws: 트랜잭션 실행에 실패하면 에러를 던집니다.
     func transaction<T>(_ operation: (OpaquePointer) throws -> T) throws -> T {
         try write { databasePointer in
             guard sqlite3_exec(databasePointer, "BEGIN IMMEDIATE TRANSACTION;", nil, nil, nil) == SQLITE_OK else {
@@ -188,19 +142,14 @@ final class SQLiteDatabase: SQLiteDatabaseProtocol {
 }
 
 extension SQLiteDatabase {
-    /*
-     SQLite statement를 준비합니다.
-
-     Parameters:
-     - sql: 준비할 SQL 문자열
-     - databasePointer: statement를 준비할 SQLite 연결 포인터
-
-     Returns:
-     - 준비된 SQLite statement 포인터
-
-     Throws:
-     - statement 준비에 실패하면 에러를 던집니다.
-     */
+    /// SQLite statement를 준비합니다.
+    ///
+    /// - Parameter sql: 준비할 SQL 문자열입니다.
+    /// - Parameter databasePointer: statement를 준비할 SQLite 연결 포인터입니다.
+    ///
+    /// - Returns: 준비된 SQLite statement 포인터입니다.
+    ///
+    /// - Throws: statement 준비에 실패하면 에러를 던집니다.
     static func prepareStatement(
         sql: String,
         in databasePointer: OpaquePointer
@@ -218,25 +167,18 @@ extension SQLiteDatabase {
         return statement
     }
 
-    /*
-     SQLite statement를 안전하게 정리합니다.
-
-     Parameters:
-     - statement: 정리할 SQLite statement 포인터
-     */
+    /// SQLite statement를 안전하게 정리합니다.
+    ///
+    /// - Parameter statement: 정리할 SQLite statement 포인터입니다.
     static func finalizeStatement(_ statement: OpaquePointer?) {
         sqlite3_finalize(statement)
     }
 
-    /*
-     최근 SQLite 오류 메시지를 반환합니다.
-
-     Parameters:
-     - databasePointer: 오류 메시지를 조회할 SQLite 연결 포인터
-
-     Returns:
-     - SQLite 오류 메시지 문자열
-     */
+    /// 최근 SQLite 오류 메시지를 반환합니다.
+    ///
+    /// - Parameter databasePointer: 오류 메시지를 조회할 SQLite 연결 포인터입니다.
+    ///
+    /// - Returns: SQLite 오류 메시지 문자열입니다.
     static func lastErrorMessage(from databasePointer: OpaquePointer) -> String {
         guard let cString = sqlite3_errmsg(databasePointer) else {
             return "Unknown SQLite error."
@@ -244,21 +186,117 @@ extension SQLiteDatabase {
 
         return String(cString: cString)
     }
+
+    /// 문자열 값을 SQLite parameter에 바인딩합니다.
+    ///
+    /// - Parameter value: 바인딩할 문자열 값입니다.
+    /// - Parameter statement: 값을 바인딩할 SQLite statement입니다.
+    /// - Parameter index: parameter 인덱스입니다.
+    ///
+    /// - Throws: 바인딩에 실패하면 statementBindingFailed를 던집니다.
+    static func bind(_ value: String, to statement: OpaquePointer, index: Int32) throws {
+        let result = value.withCString { cString in
+            sqlite3_bind_text(statement, index, cString, -1, sqliteTransientDestructor)
+        }
+
+        guard result == SQLITE_OK else {
+            throw SearchEngineError.statementBindingFailed(
+                index: index,
+                message: "Failed to bind text parameter."
+            )
+        }
+    }
+
+    /// 실수 값을 SQLite parameter에 바인딩합니다.
+    ///
+    /// - Parameter value: 바인딩할 실수 값입니다.
+    /// - Parameter statement: 값을 바인딩할 SQLite statement입니다.
+    /// - Parameter index: parameter 인덱스입니다.
+    ///
+    /// - Throws: 바인딩에 실패하면 statementBindingFailed를 던집니다.
+    static func bind(_ value: Double, to statement: OpaquePointer, index: Int32) throws {
+        let result = sqlite3_bind_double(statement, index, value)
+
+        guard result == SQLITE_OK else {
+            throw SearchEngineError.statementBindingFailed(
+                index: index,
+                message: "Failed to bind double parameter."
+            )
+        }
+    }
+
+    /// 정수 값을 SQLite parameter에 바인딩합니다.
+    ///
+    /// - Parameter value: 바인딩할 정수 값입니다.
+    /// - Parameter statement: 값을 바인딩할 SQLite statement입니다.
+    /// - Parameter index: parameter 인덱스입니다.
+    ///
+    /// - Throws: 바인딩에 실패하면 statementBindingFailed를 던집니다.
+    static func bind(_ value: Int, to statement: OpaquePointer, index: Int32) throws {
+        let result = sqlite3_bind_int64(statement, index, sqlite3_int64(value))
+
+        guard result == SQLITE_OK else {
+            throw SearchEngineError.statementBindingFailed(
+                index: index,
+                message: "Failed to bind integer parameter."
+            )
+        }
+    }
+
+    /// SQLite 문자열 바인딩에서 사용할 transient destructor입니다.
+    static var sqliteTransientDestructor: sqlite3_destructor_type {
+        unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+    }
+
+    /// 필수 문자열 컬럼을 읽습니다.
+    ///
+    /// - Parameter statement: 값을 읽을 SQLite statement입니다.
+    /// - Parameter column: 읽을 컬럼 인덱스입니다.
+    /// - Parameter columnName: 오류 메시지에 사용할 컬럼 이름입니다.
+    /// - Parameter sql: 오류 메시지에 사용할 SQL 문자열입니다.
+    ///
+    /// - Returns: 읽은 문자열 값입니다.
+    ///
+    /// - Throws: 문자열 컬럼을 읽지 못하면 statementExecutionFailed를 던집니다.
+    static func readRequiredText(
+        from statement: OpaquePointer,
+        column: Int32,
+        columnName: String,
+        sql: String
+    ) throws -> String {
+        guard let cString = sqlite3_column_text(statement, column) else {
+            throw SearchEngineError.statementExecutionFailed(
+                sql: sql,
+                message: "Missing required text column: \(columnName)."
+            )
+        }
+
+        return String(cString: cString)
+    }
+
+    /// 선택 문자열 컬럼을 읽습니다.
+    ///
+    /// - Parameter statement: 값을 읽을 SQLite statement입니다.
+    /// - Parameter column: 읽을 컬럼 인덱스입니다.
+    ///
+    /// - Returns: 읽은 문자열 값 또는 nil입니다.
+    static func readOptionalText(from statement: OpaquePointer, column: Int32) -> String? {
+        guard let cString = sqlite3_column_text(statement, column) else {
+            return nil
+        }
+
+        return String(cString: cString)
+    }
 }
 
 private extension SQLiteDatabase {
-    /*
-     구성 값에 따라 SQLite 데이터베이스 연결을 엽니다.
-
-     Parameters:
-     - configuration: 데이터베이스 초기화에 사용할 구성 값
-
-     Returns:
-     - 열린 SQLite 연결 포인터
-
-     Throws:
-     - 데이터베이스 열기에 실패하면 에러를 던집니다.
-     */
+    /// 구성 값에 따라 SQLite 데이터베이스 연결을 엽니다.
+    ///
+    /// - Parameter configuration: 데이터베이스 초기화에 사용할 구성 값입니다.
+    ///
+    /// - Returns: 열린 SQLite 연결 포인터입니다.
+    ///
+    /// - Throws: 데이터베이스 열기에 실패하면 에러를 던집니다.
     static func openDatabase(
         configuration: SearchEngineConfiguration
     ) throws -> OpaquePointer {
@@ -291,16 +329,12 @@ private extension SQLiteDatabase {
         return databasePointer
     }
 
-    /*
-     데이터베이스 공통 pragma를 적용합니다.
-
-     Parameters:
-     - databasePointer: pragma를 적용할 SQLite 연결 포인터
-     - configuration: 적용할 설정값
-
-     Throws:
-     - pragma 적용에 실패하면 에러를 던집니다.
-     */
+    /// 데이터베이스 공통 pragma를 적용합니다.
+    ///
+    /// - Parameter databasePointer: pragma를 적용할 SQLite 연결 포인터입니다.
+    /// - Parameter configuration: 적용할 설정값입니다.
+    ///
+    /// - Throws: pragma 적용에 실패하면 에러를 던집니다.
     static func configureDatabase(
         databasePointer: OpaquePointer,
         configuration: SearchEngineConfiguration
@@ -325,19 +359,14 @@ private extension SQLiteDatabase {
         )
     }
 
-    /*
-     공통 lock 아래에서 SQLite 작업을 수행합니다.
-
-     Parameters:
-     - defaultErrorTransform: SearchEngineError가 아닌 일반 오류를 기본 모듈 에러로 변환하는 클로저
-     - operation: SQLite 연결 포인터를 받아 실행할 작업 클로저
-
-     Returns:
-     - 작업 결과 값
-
-     Throws:
-     - 작업 실패 시 변환된 SearchEngineError
-     */
+    /// 공통 lock 아래에서 SQLite 작업을 수행합니다.
+    ///
+    /// - Parameter defaultErrorTransform: SearchEngineError가 아닌 일반 오류를 기본 모듈 에러로 변환하는 클로저입니다.
+    /// - Parameter operation: SQLite 연결 포인터를 받아 실행할 작업 클로저입니다.
+    ///
+    /// - Returns: 작업 결과 값입니다.
+    ///
+    /// - Throws: 작업 실패 시 변환된 SearchEngineError를 던집니다.
     func performLockedOperation<T>(
         defaultErrorTransform: (Error) -> SearchEngineError,
         operation: (OpaquePointer) throws -> T
@@ -354,16 +383,12 @@ private extension SQLiteDatabase {
         }
     }
 
-    /*
-     pragma SQL 한 문장을 실행합니다.
-
-     Parameters:
-     - sql: 실행할 pragma SQL 문자열
-     - databasePointer: pragma를 적용할 SQLite 연결 포인터
-
-     Throws:
-     - pragma 실행에 실패하면 에러를 던집니다.
-     */
+    /// pragma SQL 한 문장을 실행합니다.
+    ///
+    /// - Parameter sql: 실행할 pragma SQL 문자열입니다.
+    /// - Parameter databasePointer: pragma를 적용할 SQLite 연결 포인터입니다.
+    ///
+    /// - Throws: pragma 실행에 실패하면 에러를 던집니다.
     static func executePragma(
         _ sql: String,
         databasePointer: OpaquePointer

@@ -10,20 +10,10 @@ import SQLite3
 import XCTest
 @testable import SearchEngine
 
-/*
- SearchRebuilder의 FTS projection 재구성 동작을 확인하는 테스트입니다.
-
- Rebuilder는 documents 원본 테이블을 기준으로 projection을 전체 교체해야 하므로,
- 단순 row 수뿐 아니라 검색 가능 상태 복구, 잘못된 projection 제거, 빈 원본 상태 정리까지 함께 검증합니다.
- */
+/// SearchRebuilder의 FTS projection 재구성 동작을 확인하는 테스트입니다.
 final class SearchRebuilderTests: XCTestCase {
-    /*
-     손실된 FTS projection을 documents 원본 테이블 기준으로 복구하는지 검증합니다.
-
-     Throws:
-     - 테스트 과정에서 오류가 발생하면 에러를 던집니다.
-     */
     func test_rebuild_restoresProjectionFromDocumentsTable() throws {
+        // given
         let storage = try InMemorySQLiteStorage.make()
         let documentStore = SQLiteSearchDocumentStore(storage: storage)
         let rebuilder = SearchRebuilder(storage: storage)
@@ -46,14 +36,15 @@ final class SearchRebuilderTests: XCTestCase {
         try storage.execute(
             sql: "DELETE FROM \(SearchEngineMigrationSQL.documentsFTSTableName);"
         )
-
         XCTAssertEqual(
             try fetchRowCount(in: SearchEngineMigrationSQL.documentsFTSTableName, using: storage),
             0
         )
 
+        // when
         try rebuilder.rebuild()
 
+        // then
         XCTAssertEqual(
             try fetchRowCount(in: SearchEngineMigrationSQL.documentsTableName, using: storage),
             2
@@ -68,13 +59,8 @@ final class SearchRebuilderTests: XCTestCase {
         )
     }
 
-    /*
-     잘못된 FTS projection이 있어도 rebuild 후 documents 원본 기준으로 교체되는지 검증합니다.
-
-     Throws:
-     - 테스트 과정에서 오류가 발생하면 에러를 던집니다.
-     */
     func test_rebuild_replacesCorruptedProjectionWithDocumentProjection() throws {
+        // given
         let storage = try InMemorySQLiteStorage.make()
         let documentStore = SQLiteSearchDocumentStore(storage: storage)
         let rebuilder = SearchRebuilder(storage: storage)
@@ -104,14 +90,15 @@ final class SearchRebuilderTests: XCTestCase {
             );
             """
         )
-
         XCTAssertEqual(
             try searchStore.search(SearchQuery(text: "broken")).map(\.document.title),
             ["Swift Search"]
         )
 
+        // when
         try rebuilder.rebuild()
 
+        // then
         XCTAssertEqual(
             try searchStore.search(SearchQuery(text: "swift")).map(\.document.title),
             ["Swift Search"]
@@ -121,13 +108,8 @@ final class SearchRebuilderTests: XCTestCase {
         )
     }
 
-    /*
-     원본 문서가 없으면 rebuild가 stray projection을 모두 제거하는지 검증합니다.
-
-     Throws:
-     - 테스트 과정에서 오류가 발생하면 에러를 던집니다.
-     */
     func test_rebuild_withNoDocuments_clearsProjectionTable() throws {
+        // given
         let storage = try InMemorySQLiteStorage.make()
         let rebuilder = SearchRebuilder(storage: storage)
 
@@ -144,14 +126,15 @@ final class SearchRebuilderTests: XCTestCase {
             );
             """
         )
-
         XCTAssertEqual(
             try fetchRowCount(in: SearchEngineMigrationSQL.documentsFTSTableName, using: storage),
             1
         )
 
+        // when
         try rebuilder.rebuild()
 
+        // then
         XCTAssertEqual(
             try fetchRowCount(in: SearchEngineMigrationSQL.documentsTableName, using: storage),
             0
@@ -162,14 +145,8 @@ final class SearchRebuilderTests: XCTestCase {
         )
     }
 
-
-    /*
-     rebuild 이후에도 scope 기반 검색 정합성이 유지되는지 검증합니다.
-
-     Throws:
-     - 테스트 과정에서 오류가 발생하면 에러를 던집니다.
-     */
     func test_rebuild_preservesScopedSearchResult() throws {
+        // given
         let storage = try InMemorySQLiteStorage.make()
         let documentStore = SQLiteSearchDocumentStore(storage: storage)
         let rebuilder = SearchRebuilder(storage: storage)
@@ -195,8 +172,10 @@ final class SearchRebuilderTests: XCTestCase {
             sql: "DELETE FROM \(SearchEngineMigrationSQL.documentsFTSTableName);"
         )
 
+        // when
         try rebuilder.rebuild()
 
+        // then
         XCTAssertEqual(
             try searchStore.search(
                 SearchQuery(
@@ -208,13 +187,8 @@ final class SearchRebuilderTests: XCTestCase {
         )
     }
 
-    /*
-     rebuild 이후에도 title, body, keywords 대상 검색 가능 상태가 유지되는지 검증합니다.
-
-     Throws:
-     - 테스트 과정에서 오류가 발생하면 에러를 던집니다.
-     */
     func test_rebuild_preservesSearchTargetsAcrossTitleBodyAndKeywords() throws {
+        // given
         let storage = try InMemorySQLiteStorage.make()
         let documentStore = SQLiteSearchDocumentStore(storage: storage)
         let rebuilder = SearchRebuilder(storage: storage)
@@ -232,8 +206,10 @@ final class SearchRebuilderTests: XCTestCase {
             sql: "DELETE FROM \(SearchEngineMigrationSQL.documentsFTSTableName);"
         )
 
+        // when
         try rebuilder.rebuild()
 
+        // then
         XCTAssertEqual(
             try searchStore.search(SearchQuery(text: "swift")).map(\.document.title),
             ["Swift Search"]
@@ -250,20 +226,6 @@ final class SearchRebuilderTests: XCTestCase {
 }
 
 private extension SearchRebuilderTests {
-    /*
-     테스트용 SearchDocument를 생성합니다.
-
-     Parameters:
-     - id: 문서 식별자
-     - scope: 문서 범위
-     - title: 문서 제목
-     - body: 문서 본문
-     - keywords: 문서 키워드 목록
-     - lastUpdatedAt: 문서 갱신 시각
-
-     Returns:
-     - 테스트에 사용할 SearchDocument
-     */
     func makeDocument(
         id: String,
         scope: SearchScope = SearchScope(rawValue: "app.notice"),
@@ -282,19 +244,6 @@ private extension SearchRebuilderTests {
         )
     }
 
-    /*
-     지정한 테이블의 전체 row 수를 조회합니다.
-
-     Parameters:
-     - tableName: row 수를 조회할 테이블 이름
-     - storage: 조회에 사용할 SQLite 저장 foundation
-
-     Returns:
-     - 테이블 전체 row 수
-
-     Throws:
-     - 테스트 과정에서 오류가 발생하면 에러를 던집니다.
-     */
     func fetchRowCount(
         in tableName: String,
         using storage: SQLiteStorageProtocol

@@ -7,37 +7,29 @@
 
 import Foundation
 
-/*
- SearchDocument와 SearchDocumentMO 사이의 변환을 담당하는 Mapper입니다.
-
- SearchEngine API는 SearchDocument를 외부 계약으로 사용하고,
- SQLite 저장 계층은 SearchDocumentMO를 사용합니다.
- 이 타입은 두 표현을 변환하여 계층 간 책임을 분리합니다.
- */
+/// SearchDocument와 SearchDocumentRecord 사이의 변환을 담당하는 Mapper입니다.
+///
+/// SearchEngine API는 SearchDocument를 외부 계약으로 사용하고,
+/// SQLite 저장 계층은 SearchDocumentRecord를 사용합니다.
+/// 이 타입은 두 표현을 변환하여 계층 간 책임을 분리합니다.
 enum SearchDocumentMapper {
-    /*
-     저장소 projection에서 사용할 키워드 구분자입니다.
-     */
+    /// 저장소 projection에서 사용할 키워드 구분자입니다.
     private static let keywordsSeparator = "\n"
 
-    /*
-     API 모델을 ManagedObject 표현으로 변환합니다.
-
-     Parameters:
-     - document: 저장 표현으로 변환할 SearchDocument 값
-
-     Returns:
-     - SQLite 저장 계층에 기록할 SearchDocumentMO
-     */
-    static func toManagedObject(
+    /// API 모델을 Record 표현으로 변환합니다.
+    ///
+    /// - Parameter document: 저장 표현으로 변환할 SearchDocument 값입니다.
+    ///
+    /// - Returns: SQLite 저장 계층에 기록할 SearchDocumentRecord입니다.
+    static func toRecord(
         _ document: SearchDocument
-    ) -> SearchDocumentMO {
+    ) -> SearchDocumentRecord {
         let normalizedKeywords = document.keywords
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { $0.isEmpty == false }
             .joined(separator: keywordsSeparator)
 
-        return SearchDocumentMO(
+        return SearchDocumentRecord(
             id: document.id.trimmingCharacters(in: .whitespacesAndNewlines),
             scope: document.scope.normalizedValue,
             title: document.title.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -47,30 +39,26 @@ enum SearchDocumentMapper {
         )
     }
 
-    /*
-     ManagedObject 표현을 API 모델로 복원합니다.
-
-     Parameters:
-     - managedObject: API 모델로 복원할 SearchDocument ManagedObject
-
-     Returns:
-     - SearchEngine 외부에 전달할 SearchDocument 값 객체
-     */
+    /// Record 표현을 API 모델로 복원합니다.
+    ///
+    /// - Parameter record: API 모델로 복원할 SearchDocument Record입니다.
+    ///
+    /// - Returns: SearchEngine 외부에 전달할 SearchDocument 값 객체입니다.
     static func toDocument(
-        _ managedObject: SearchDocumentMO
+        _ record: SearchDocumentRecord
     ) -> SearchDocument {
-        let keywords = managedObject.keywords
+        let keywords = record.keywords
             .components(separatedBy: keywordsSeparator)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { $0.isEmpty == false }
 
         return SearchDocument(
-            id: managedObject.id,
-            scope: SearchScope(rawValue: managedObject.scope),
-            title: managedObject.title,
-            body: managedObject.body,
+            id: record.id,
+            scope: SearchScope(rawValue: record.scope),
+            title: record.title,
+            body: record.body,
             keywords: keywords,
-            lastUpdatedAt: Date(timeIntervalSince1970: managedObject.lastUpdatedAt)
+            lastUpdatedAt: Date(timeIntervalSince1970: record.lastUpdatedAt)
         )
     }
 }

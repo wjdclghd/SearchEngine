@@ -9,19 +9,15 @@ import Foundation
 import XCTest
 @testable import SearchEngine
 
-/*
- SearchHitMapper의 변환 규칙을 확인하는 테스트입니다.
-
- 검색 결과는 문서 원본과 부가 검색 정보를 함께 담고 있으므로,
- 문서 복원 규칙과 스니펫 정규화 규칙이 흔들리면 화면 표시가 불안정해질 수 있습니다.
- 이 테스트는 점수, 문서, 스니펫이 공개 모델로 일관되게 변환되는지 검증합니다.
- */
+/// SearchHitMapper의 변환 규칙을 확인하는 테스트입니다.
+///
+/// 검색 결과는 문서 원본과 부가 검색 정보를 함께 담고 있으므로,
+/// 문서 복원 규칙과 스니펫 정규화 규칙이 흔들리면 화면 표시가 불안정해질 수 있습니다.
+/// 이 테스트는 점수, 문서, 스니펫이 공개 모델로 일관되게 변환되는지 검증합니다.
 final class SearchHitMapperTests: XCTestCase {
-    /*
-     SearchHit ManagedObject가 공개 SearchHit 모델로 변환되는지 검증합니다.
-     */
+    /// SearchHit Record가 공개 SearchHit 모델로 변환되는지 검증합니다.
     func test_toSearchHit_returnsMappedHit() {
-        let managedObject = SearchHitMO(
+        let record = SearchHitRecord(
             id: "notice-1",
             scope: "app.notice",
             title: "Search Engine",
@@ -33,7 +29,7 @@ final class SearchHitMapperTests: XCTestCase {
             bodySnippet: "SQLite <b>full</b> text search"
         )
 
-        let hit = SearchHitMapper.toSearchHit(managedObject)
+        let hit = SearchHitMapper.toSearchHit(record)
 
         XCTAssertEqual(hit.document.id, "notice-1")
         XCTAssertEqual(hit.document.scope, SearchScope(rawValue: "app.notice"))
@@ -48,11 +44,9 @@ final class SearchHitMapperTests: XCTestCase {
         ))
     }
 
-    /*
-     공백 스니펫은 nil로 정리되어 불필요한 SearchSnippet 생성이 방지되는지 검증합니다.
-     */
+    /// 공백 스니펫은 nil로 정리되어 불필요한 SearchSnippet 생성이 방지되는지 검증합니다.
     func test_toSearchHit_withBlankSnippets_returnsNilSnippet() {
-        let managedObject = SearchHitMO(
+        let record = SearchHitRecord(
             id: "notice-1",
             scope: "app.notice",
             title: "Search Engine",
@@ -64,7 +58,7 @@ final class SearchHitMapperTests: XCTestCase {
             bodySnippet: nil
         )
 
-        let hit = SearchHitMapper.toSearchHit(managedObject)
+        let hit = SearchHitMapper.toSearchHit(record)
 
         XCTAssertNil(hit.snippet)
     }
