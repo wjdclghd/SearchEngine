@@ -10,27 +10,21 @@ import SQLite3
 import XCTest
 @testable import SearchEngine
 
-/*
- SQLiteDatabase의 저수준 SQLite foundation 동작과 에러 매핑을 검증하는 테스트입니다.
-
- 이 테스트는 SQL 공백 입력, statement 준비 실패, 읽기/쓰기 오류 매핑,
- in-memory 연결 문자열, 트랜잭션 롤백 같은 경계를 직접 확인하여
- 이후 Storage, Indexing, 검색 실행 계층이 신뢰할 수 있는 실행 기반을 보장합니다.
- */
+/// SQLiteDatabase의 저수준 SQLite 기반 동작과 에러 매핑을 검증하는 테스트입니다.
+///
+/// 이 테스트는 SQL 공백 입력, statement 준비 실패, 읽기/쓰기 오류 매핑,
+/// in-memory 연결 문자열, 트랜잭션 롤백 같은 경계를 직접 확인하여
+/// 이후 Storage, Indexing, 검색 실행 계층이 신뢰할 수 있는 실행 기반을 보장합니다.
 final class SQLiteDatabaseTests: XCTestCase {
-    /*
-     테스트에서 발생시키는 의도적인 실패를 표현하는 에러 타입입니다.
-
-     read와 write가 내부 오류를 SearchEngineError로
-     올바르게 감싸는지 검증하기 위해 사용합니다.
-     */
+    /// 테스트에서 발생시키는 의도적인 실패를 표현하는 에러 타입입니다.
+    ///
+    /// read와 write가 내부 오류를 SearchEngineError로
+    /// 올바르게 감싸는지 검증하기 위해 사용합니다.
     private enum TestFailure: Error {
         case expected
     }
 
-    /*
-     공백 SQL을 실행하면 statementExecutionFailed가 발생하는지 검증합니다.
-     */
+    /// 공백 SQL을 실행하면 statementExecutionFailed가 발생하는지 검증합니다.
     func test_execute_withEmptySQL_throwsStatementExecutionFailed() throws {
         let database = try InMemorySQLiteDatabase.make()
 
@@ -44,12 +38,9 @@ final class SQLiteDatabaseTests: XCTestCase {
         }
     }
 
-    /*
-     잘못된 SQL statement를 준비하면 statementPreparationFailed가 발생하는지 검증합니다.
-
-     Throws:
-     - 테스트 과정에서 오류가 발생하면 에러를 던집니다.
-     */
+    /// 잘못된 SQL statement를 준비하면 statementPreparationFailed가 발생하는지 검증합니다.
+    ///
+    /// - Throws: 테스트 과정에서 오류가 발생하면 에러를 던집니다.
     func test_prepareStatement_withInvalidSQL_throwsStatementPreparationFailed() throws {
         let database = try InMemorySQLiteDatabase.make()
 
@@ -74,9 +65,7 @@ final class SQLiteDatabaseTests: XCTestCase {
         }
     }
 
-    /*
-     읽기 작업 블록이 일반 오류를 던지면 readFailed로 변환되는지 검증합니다.
-     */
+    /// 읽기 작업 블록이 일반 오류를 던지면 readFailed로 변환되는지 검증합니다.
     func test_read_whenBlockThrows_mapsToReadFailed() throws {
         let database = try InMemorySQLiteDatabase.make()
 
@@ -94,9 +83,7 @@ final class SQLiteDatabaseTests: XCTestCase {
         }
     }
 
-    /*
-     쓰기 작업 블록이 일반 오류를 던지면 writeFailed로 변환되는지 검증합니다.
-     */
+    /// 쓰기 작업 블록이 일반 오류를 던지면 writeFailed로 변환되는지 검증합니다.
     func test_write_whenBlockThrows_mapsToWriteFailed() throws {
         let database = try InMemorySQLiteDatabase.make()
 
@@ -114,12 +101,9 @@ final class SQLiteDatabaseTests: XCTestCase {
         }
     }
 
-    /*
-     in-memory 연결 문자열이 shared cache URI 형식으로 생성되는지 검증합니다.
-
-     Throws:
-     - 테스트 과정에서 오류가 발생하면 에러를 던집니다.
-     */
+    /// in-memory 연결 문자열이 shared cache URI 형식으로 생성되는지 검증합니다.
+    ///
+    /// - Throws: 테스트 과정에서 오류가 발생하면 에러를 던집니다.
     func test_inMemoryConnectionString_returnsSharedCacheURI() throws {
         let configuration = SearchEngineConfiguration.inMemory(identifier: "Search Engine Test")
         let connectionString = try configuration.inMemoryConnectionString()
@@ -129,12 +113,9 @@ final class SQLiteDatabaseTests: XCTestCase {
         XCTAssertTrue(connectionString.contains("cache=shared"))
     }
 
-    /*
-     동일한 in-memory 식별자를 사용하면 같은 shared cache를 참조하는지 검증합니다.
-
-     Throws:
-     - 테스트 과정에서 오류가 발생하면 에러를 던집니다.
-     */
+    /// 동일한 in-memory 식별자를 사용하면 같은 shared cache를 참조하는지 검증합니다.
+    ///
+    /// - Throws: 테스트 과정에서 오류가 발생하면 에러를 던집니다.
     func test_inMemoryDatabase_withSameIdentifier_sharesDatabase() throws {
         let identifier = UUID().uuidString
         let firstDatabase = try InMemorySQLiteDatabase.make(identifier: identifier)
@@ -165,12 +146,9 @@ final class SQLiteDatabaseTests: XCTestCase {
     }
 
 
-    /*
-     foreign key 옵션을 활성화하면 foreign_keys pragma 값이 1로 적용되는지 검증합니다.
-
-     Throws:
-     - 테스트 과정에서 오류가 발생하면 에러를 던집니다.
-     */
+    /// foreign key 옵션을 활성화하면 foreign_keys pragma 값이 1로 적용되는지 검증합니다.
+    ///
+    /// - Throws: 테스트 과정에서 오류가 발생하면 에러를 던집니다.
     func test_init_withForeignKeysEnabled_setsForeignKeysPragmaToOn() throws {
         let database = try makeDiskDatabase(
             enablesWriteAheadLogging: false,
@@ -194,12 +172,9 @@ final class SQLiteDatabaseTests: XCTestCase {
         XCTAssertEqual(foreignKeysValue, 1)
     }
 
-    /*
-     WAL 옵션을 활성화한 디스크 기반 데이터베이스에서 journal_mode pragma 값이 wal로 적용되는지 검증합니다.
-
-     Throws:
-     - 테스트 과정에서 오류가 발생하면 에러를 던집니다.
-     */
+    /// WAL 옵션을 활성화한 디스크 기반 데이터베이스에서 journal_mode pragma 값이 wal로 적용되는지 검증합니다.
+    ///
+    /// - Throws: 테스트 과정에서 오류가 발생하면 에러를 던집니다.
     func test_init_withWriteAheadLoggingEnabled_setsJournalModeToWAL() throws {
         let database = try makeDiskDatabase(
             enablesWriteAheadLogging: true,
@@ -224,16 +199,13 @@ final class SQLiteDatabaseTests: XCTestCase {
         XCTAssertEqual(journalMode.lowercased(), "wal")
     }
 
-    /*
-     기본 migration plan이 데이터베이스 초기화 시 자동 적용되어 user_version과 메타데이터 테이블이 준비되는지 검증합니다.
-
-     기본 책임은
-     foundation 연결 생성만으로도 최소 schema version과 내부 메타데이터 구조를 일관되게 보장하는 것입니다.
-     이 테스트는 SQLiteDatabase 초기화 시 migration plan이 실제로 실행되는지 확인합니다.
-
-     Throws:
-     - 테스트 과정에서 오류가 발생하면 에러를 던집니다.
-     */
+    /// 기본 migration plan이 데이터베이스 초기화 시 자동 적용되어 user_version과 메타데이터 테이블이 준비되는지 검증합니다.
+    ///
+    /// 기본 책임은
+    /// 기반 연결 생성만으로도 최소 schema version과 내부 메타데이터 구조를 일관되게 보장하는 것입니다.
+    /// 이 테스트는 SQLiteDatabase 초기화 시 migration plan이 실제로 실행되는지 확인합니다.
+    ///
+    /// - Throws: 테스트 과정에서 오류가 발생하면 에러를 던집니다.
     func test_init_appliesDefaultMigrationPlan() throws {
         let database = try InMemorySQLiteDatabase.make()
 
@@ -269,16 +241,13 @@ final class SQLiteDatabaseTests: XCTestCase {
         XCTAssertEqual(metadataTableCount, 1)
     }
 
-    /*
-     더 높은 migration plan으로 같은 디스크 데이터베이스를 다시 열면 pending migration만 적용되는지 검증합니다.
-
-     스키마가 누적 확장되는 전제를 가지므로,
-     이미 version 1까지 적용된 저장소를 version 2 plan으로 다시 열었을 때
-     새 migration만 추가로 반영되고 user_version이 올바르게 갱신되어야 합니다.
-
-     Throws:
-     - 테스트 과정에서 오류가 발생하면 에러를 던집니다.
-     */
+    /// 더 높은 migration plan으로 같은 디스크 데이터베이스를 다시 열면 pending migration만 적용되는지 검증합니다.
+    ///
+    /// 스키마가 누적 확장되는 전제를 가지므로,
+    /// 이미 version 1까지 적용된 저장소를 version 2 plan으로 다시 열었을 때
+    /// 새 migration만 추가로 반영되고 user_version이 올바르게 갱신되어야 합니다.
+    ///
+    /// - Throws: 테스트 과정에서 오류가 발생하면 에러를 던집니다.
     func test_init_withExpandedMigrationPlan_appliesPendingMigrationsOnly() throws {
         let temporaryBaseDirectoryURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -351,12 +320,9 @@ final class SQLiteDatabaseTests: XCTestCase {
     }
 
 
-    /*
-     migration SQL 실행이 실패하면 초기화가 migrationFailed로 종료되고 schema 변경이 rollback 되는지 검증합니다.
-
-     Throws:
-     - 테스트 과정에서 오류가 발생하면 에러를 던집니다.
-     */
+    /// migration SQL 실행이 실패하면 초기화가 migrationFailed로 종료되고 schema 변경이 rollback 되는지 검증합니다.
+    ///
+    /// - Throws: 테스트 과정에서 오류가 발생하면 에러를 던집니다.
     func test_init_whenMigrationStatementFails_rollsBackAndThrowsMigrationFailed() throws {
         let temporaryBaseDirectoryURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -438,12 +404,9 @@ final class SQLiteDatabaseTests: XCTestCase {
         XCTAssertEqual(rollbackTableCount, 0)
     }
 
-    /*
-     disabled migration plan을 사용하면 schema 변경과 user_version 갱신이 수행되지 않는지 검증합니다.
-
-     Throws:
-     - 테스트 과정에서 오류가 발생하면 에러를 던집니다.
-     */
+    /// disabled migration plan을 사용하면 schema 변경과 user_version 갱신이 수행되지 않는지 검증합니다.
+    ///
+    /// - Throws: 테스트 과정에서 오류가 발생하면 에러를 던집니다.
     func test_disabledMigrationPlan_doesNotApplySchemaChanges() throws {
         let configuration = SearchEngineConfiguration.inMemory(
             identifier: UUID().uuidString,
@@ -489,22 +452,17 @@ final class SQLiteDatabaseTests: XCTestCase {
 }
 
 private extension SQLiteDatabaseTests {
-    /*
-     pragma 동작 검증용 디스크 기반 SQLiteDatabase를 생성합니다.
-
-     WAL journal_mode는 in-memory 연결에서 기대값이 달라질 수 있으므로,
-     디스크 기반 임시 경로를 사용해 실제 운영 경로와 가까운 조건에서 확인합니다.
-
-     Parameters:
-     - enablesWriteAheadLogging: WAL 모드 사용 여부
-     - enablesForeignKeys: foreign key 사용 여부
-
-     Returns:
-     - 지정한 설정으로 초기화된 SQLiteDatabase
-
-     Throws:
-     - 테스트 과정에서 오류가 발생하면 에러를 던집니다.
-     */
+    /// pragma 동작 검증용 디스크 기반 SQLiteDatabase를 생성합니다.
+    ///
+    /// WAL journal_mode는 in-memory 연결에서 기대값이 달라질 수 있으므로,
+    /// 디스크 기반 임시 경로를 사용해 실제 운영 경로와 가까운 조건에서 확인합니다.
+    ///
+    /// - Parameter enablesWriteAheadLogging: WAL 모드 사용 여부입니다.
+    /// - Parameter enablesForeignKeys: foreign key 사용 여부입니다.
+    ///
+    /// - Returns: 지정한 설정으로 초기화된 SQLiteDatabase입니다.
+    ///
+    /// - Throws: 테스트 과정에서 오류가 발생하면 에러를 던집니다.
     func makeDiskDatabase(
         enablesWriteAheadLogging: Bool,
         enablesForeignKeys: Bool

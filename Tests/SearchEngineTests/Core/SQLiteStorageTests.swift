@@ -10,23 +10,15 @@ import SQLite3
 import XCTest
 @testable import SearchEngine
 
-/*
- SQLiteStorage의 기본 읽기/쓰기 및 트랜잭션 동작을 검증하는 테스트입니다.
-
- 아직 실제 검색 엔진 구현이 없으므로,
- 저장 foundation이 안전한 SQL 실행과 트랜잭션 롤백을 제공하는지 먼저 확인해두어야
- Indexing, Querying 계층이 같은 기반을 신뢰하고 확장할 수 있습니다.
- */
+/// SQLiteStorage의 기본 읽기/쓰기 및 트랜잭션 동작을 검증하는 테스트입니다.
+///
+/// SearchEngine의 색인, 검색, 자동완성 Store가 공통으로 사용하는
+/// SQL 실행과 트랜잭션 롤백 기반을 검증합니다.
 final class SQLiteStorageTests: XCTestCase {
-    /*
-     간단한 테이블을 만들고 데이터 삽입 후 다시 읽을 수 있는지 검증합니다.
 
-     Throws:
-     - 테스트 과정에서 오류가 발생하면 에러를 던집니다.
-     */
     func test_execute_readAndWrite_succeeds() throws {
+        // given
         let storage = try InMemorySQLiteStorage.make()
-
         try storage.execute(
             sql: """
             CREATE TABLE items (
@@ -36,6 +28,7 @@ final class SQLiteStorageTests: XCTestCase {
             """
         )
 
+        // when
         try storage.write { databasePointer in
             guard sqlite3_exec(
                 databasePointer,
@@ -66,15 +59,15 @@ final class SQLiteStorageTests: XCTestCase {
             return String(cString: cString)
         }
 
+        // then
         XCTAssertEqual(title, "SwiftUI")
     }
 
-    /*
-     잘못된 SQL을 실행하면 statementExecutionFailed가 발생하는지 검증합니다.
-     */
     func test_execute_withInvalidSQL_throwsStatementExecutionFailed() throws {
+        // given
         let storage = try InMemorySQLiteStorage.make()
 
+        // when / then
         XCTAssertThrowsError(try storage.execute(sql: "INVALID SQL")) { error in
             guard case let SearchEngineError.statementExecutionFailed(sql, message) = error else {
                 return XCTFail("Expected statementExecutionFailed, got \(error)")
@@ -85,15 +78,9 @@ final class SQLiteStorageTests: XCTestCase {
         }
     }
 
-    /*
-     transaction 내부 작업이 성공하면 commit 되는지 검증합니다.
-
-     Throws:
-     - 테스트 과정에서 오류가 발생하면 에러를 던집니다.
-     */
     func test_transaction_commitsChanges() throws {
+        // given
         let storage = try InMemorySQLiteStorage.make()
-
         try storage.execute(
             sql: """
             CREATE TABLE items (
@@ -102,6 +89,7 @@ final class SQLiteStorageTests: XCTestCase {
             """
         )
 
+        // when
         try storage.transaction { databasePointer in
             guard sqlite3_exec(
                 databasePointer,
@@ -131,18 +119,13 @@ final class SQLiteStorageTests: XCTestCase {
             return Int(sqlite3_column_int(statement, 0))
         }
 
+        // then
         XCTAssertEqual(count, 1)
     }
 
-    /*
-     transaction 내부 작업이 실패하면 rollback 되는지 검증합니다.
-
-     Throws:
-     - 테스트 과정에서 오류가 발생하면 에러를 던집니다.
-     */
     func test_transaction_rollsBackOnFailure() throws {
+        // given
         let storage = try InMemorySQLiteStorage.make()
-
         try storage.execute(
             sql: """
             CREATE TABLE items (
@@ -151,6 +134,7 @@ final class SQLiteStorageTests: XCTestCase {
             """
         )
 
+        // when
         XCTAssertThrowsError(
             try storage.transaction { databasePointer in
                 guard sqlite3_exec(
@@ -186,6 +170,7 @@ final class SQLiteStorageTests: XCTestCase {
             return Int(sqlite3_column_int(statement, 0))
         }
 
+        // then
         XCTAssertEqual(count, 0)
     }
 }

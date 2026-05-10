@@ -9,18 +9,14 @@ import Foundation
 import XCTest
 @testable import SearchEngine
 
-/*
- SearchDocumentMapper의 변환 규칙을 확인하는 테스트입니다.
-
- 공개 문서 모델과 SQLite 저장 표현 사이의 정규화 규칙이 흔들리면,
- 저장과 검색 결과 복원이 서로 다른 데이터를 바라보게 됩니다.
- 이 테스트는 scope, keywords, lastUpdatedAt 변환 규칙이 일관되게 유지되는지 검증합니다.
- */
+/// SearchDocumentMapper의 변환 규칙을 확인하는 테스트입니다.
+///
+/// 공개 문서 모델과 SQLite 저장 표현 사이의 정규화 규칙이 흔들리면,
+/// 저장과 검색 결과 복원이 서로 다른 데이터를 바라보게 됩니다.
+/// 이 테스트는 scope, keywords, lastUpdatedAt 변환 규칙이 일관되게 유지되는지 검증합니다.
 final class SearchDocumentMapperTests: XCTestCase {
-    /*
-     문서를 ManagedObject 표현으로 변환할 때 scope와 keywords가 정규화되는지 검증합니다.
-     */
-    func test_toManagedObject_normalizesScopeAndKeywords() {
+    /// 문서를 Record 표현으로 변환할 때 scope와 keywords가 정규화되는지 검증합니다.
+    func test_toRecord_normalizesScopeAndKeywords() {
         let document = SearchDocument(
             id: " document-id ",
             scope: SearchScope(rawValue: "  app.notice  "),
@@ -30,21 +26,19 @@ final class SearchDocumentMapperTests: XCTestCase {
             lastUpdatedAt: Date(timeIntervalSince1970: 123.45)
         )
 
-        let managedObject = SearchDocumentMapper.toManagedObject(document)
+        let record = SearchDocumentMapper.toRecord(document)
 
-        XCTAssertEqual(managedObject.id, "document-id")
-        XCTAssertEqual(managedObject.scope, "app.notice")
-        XCTAssertEqual(managedObject.title, "Search Engine")
-        XCTAssertEqual(managedObject.body, "sqlite fts indexing")
-        XCTAssertEqual(managedObject.keywords, "swift\nios\nfts5")
-        XCTAssertEqual(managedObject.lastUpdatedAt, 123.45, accuracy: 0.0001)
+        XCTAssertEqual(record.id, "document-id")
+        XCTAssertEqual(record.scope, "app.notice")
+        XCTAssertEqual(record.title, "Search Engine")
+        XCTAssertEqual(record.body, "sqlite fts indexing")
+        XCTAssertEqual(record.keywords, "swift\nios\nfts5")
+        XCTAssertEqual(record.lastUpdatedAt, 123.45, accuracy: 0.0001)
     }
 
-    /*
-     ManagedObject 표현을 공개 문서 모델로 복원할 때 keywords와 날짜가 올바르게 복원되는지 검증합니다.
-     */
+    /// Record 표현을 공개 문서 모델로 복원할 때 keywords와 날짜가 올바르게 복원되는지 검증합니다.
     func test_toDocument_restoresSearchDocument() {
-        let managedObject = SearchDocumentMO(
+        let record = SearchDocumentRecord(
             id: "document-id",
             scope: "app.notice",
             title: "Search Engine",
@@ -53,7 +47,7 @@ final class SearchDocumentMapperTests: XCTestCase {
             lastUpdatedAt: 999.5
         )
 
-        let document = SearchDocumentMapper.toDocument(managedObject)
+        let document = SearchDocumentMapper.toDocument(record)
 
         XCTAssertEqual(document.id, "document-id")
         XCTAssertEqual(document.scope, SearchScope(rawValue: "app.notice"))
