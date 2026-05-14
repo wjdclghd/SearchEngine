@@ -67,7 +67,7 @@ enum SearchEngineMigrationSQL {
         body,
         keywords,
         tokenize = 'unicode61',
-        prefix = '2 3 4'
+        prefix = '1 2 3 4'
     );
     """
 }

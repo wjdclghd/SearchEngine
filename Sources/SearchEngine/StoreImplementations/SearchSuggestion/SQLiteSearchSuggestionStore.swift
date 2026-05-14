@@ -30,6 +30,11 @@ final class SQLiteSearchSuggestionStore {
         try query.validate()
 
         let normalizedInput = query.text.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if SearchMatchQueryBuilder.isJamoOnlyQuery(normalizedInput) {
+            return try suggestWithJamoFallback(normalizedInput: normalizedInput, query: query)
+        }
+
         let matchQuery = try SearchMatchQueryBuilder.buildMatchQuery(from: SearchQuery(text: normalizedInput))
         let exactPattern = normalizedInput
         let prefixPattern = "\(normalizedInput)%"
@@ -109,6 +114,76 @@ final class SQLiteSearchSuggestionStore {
 }
 
 private extension SQLiteSearchSuggestionStore {
+    /// 자모 전용 입력에 대해 keywords LIKE 기반으로 suggestion 목록을 반환합니다.
+    ///
+    /// FTS MATCH 대신 `search_documents` 원본 테이블의 keywords 컬럼을 LIKE로 조회합니다.
+    /// `unicode61` 토크나이저가 자모 문자를 word character로 처리하지 않을 경우에도
+    /// keywords에 저장된 초성 문자열을 안정적으로 조회할 수 있습니다.
+    ///
+    /// - Parameter normalizedInput: 앞뒤 공백이 제거된 자모 입력 문자열입니다.
+    /// - Parameter query: 범위 필터와 limit 정보를 담은 원본 질의입니다.
+    ///
+    /// - Returns: keywords에 해당 자모가 포함된 문서의 제목 기반 suggestion 목록입니다.
+    ///
+    /// - Throws: SQLite 조회 실패 시 에러를 던집니다.
+    func suggestWithJamoFallback(
+        normalizedInput: String,
+        query: SearchSuggestionQuery
+    ) throws -> [SearchSuggestion] {
+        let containsPattern = "%\(normalizedInput)%"
+        let sql = Self.jamoSuggestSQL(hasScopeFilter: query.scope != nil)
+
+        return try storage.read { databasePointer in
+            let statement = try SQLiteDatabase.prepareStatement(sql: sql, in: databasePointer)
+            defer { SQLiteDatabase.finalizeStatement(statement) }
+
+            var bindingIndex: Int32 = 1
+            try SQLiteDatabase.bind(containsPattern, to: statement, index: bindingIndex)
+            bindingIndex += 1
+
+            if let scope = query.scope {
+                try SQLiteDatabase.bind(scope.normalizedValue, to: statement, index: bindingIndex)
+                bindingIndex += 1
+            }
+
+            try SQLiteDatabase.bind(query.limit, to: statement, index: bindingIndex)
+
+            var suggestions: [SearchSuggestion] = []
+
+            while true {
+                let stepResult = sqlite3_step(statement)
+
+                if stepResult == SQLITE_DONE {
+                    break
+                }
+
+                guard stepResult == SQLITE_ROW else {
+                    throw SearchEngineError.statementExecutionFailed(
+                        sql: sql,
+                        message: SQLiteDatabase.lastErrorMessage(from: databasePointer)
+                    )
+                }
+
+                let record = try Self.makeSearchSuggestionRecord(from: statement)
+                suggestions.append(
+                    SearchSuggestionMapper.toSearchSuggestion(
+                        SearchSuggestionRecord(
+                            text: record.text,
+                            scope: record.scope,
+                            score: record.score,
+                            source: record.source,
+                            kind: record.kind,
+                            documentID: record.documentID,
+                            matchedText: normalizedInput
+                        )
+                    )
+                )
+            }
+
+            return suggestions
+        }
+    }
+
     /// 범위 필터 포함 여부에 따라 suggestion SQL을 생성합니다.
     ///
     /// - Parameter hasScopeFilter: 범위 필터 적용 여부입니다.
@@ -152,6 +227,74 @@ private extension SQLiteSearchSuggestionStore {
             JOIN \(SearchEngineMigrationSQL.documentsTableName) AS d
                 ON d.id = \(SearchEngineMigrationSQL.documentsFTSTableName).id
             WHERE \(SearchEngineMigrationSQL.documentsFTSTableName) MATCH ?
+              AND TRIM(d.title) <> ''
+            \(scopeCondition)
+        ),
+        ranked_suggestions AS (
+            SELECT
+                normalized_title,
+                normalized_title_key,
+                suggestion_scope,
+                suggestion_document_id,
+                suggestion_source,
+                base_score,
+                COUNT(*) OVER (
+                    PARTITION BY normalized_title_key, suggestion_scope
+                ) AS duplicate_count,
+                MAX(last_updated_at) OVER (
+                    PARTITION BY normalized_title_key, suggestion_scope
+                ) AS latest_updated_at,
+                ROW_NUMBER() OVER (
+                    PARTITION BY normalized_title_key, suggestion_scope
+                    ORDER BY base_score DESC, last_updated_at DESC, normalized_title ASC
+                ) AS row_number
+            FROM suggestion_candidates
+        )
+        SELECT
+            normalized_title AS suggestion_text,
+            suggestion_scope,
+            suggestion_document_id,
+            suggestion_source,
+            'document' AS suggestion_kind,
+            (base_score + duplicate_count * 10) AS score,
+            latest_updated_at
+        FROM ranked_suggestions
+        WHERE row_number = 1
+        \(orderByClause)
+        LIMIT ?;
+        """
+    }
+
+    /// 범위 필터 포함 여부에 따라 자모 초성 검색 전용 SQL을 생성합니다.
+    ///
+    /// FTS MATCH 없이 `search_documents` 원본 테이블의 keywords 컬럼을 LIKE로 조회합니다.
+    /// 중복 제거와 점수 계산은 기존 suggestion SQL과 동일한 CTE 구조를 따릅니다.
+    ///
+    /// - Parameter hasScopeFilter: 범위 필터 적용 여부입니다.
+    ///
+    /// - Returns: 실행할 자모 초성 검색 SQL 문자열입니다.
+    static func jamoSuggestSQL(hasScopeFilter: Bool) -> String {
+        let scopeCondition = hasScopeFilter ? "          AND d.scope = ?" : ""
+        let orderByClause = SQLBuilder.orderBy(
+            clauses: [
+                .init(column: "score", direction: .descending),
+                .init(column: "latest_updated_at", direction: .descending),
+                .init(column: "suggestion_text", direction: .ascending)
+            ]
+        )
+
+        return """
+        WITH suggestion_candidates AS (
+            SELECT
+                TRIM(d.title) AS normalized_title,
+                LOWER(TRIM(d.title)) AS normalized_title_key,
+                d.scope AS suggestion_scope,
+                d.id AS suggestion_document_id,
+                180 AS base_score,
+                'keyword' AS suggestion_source,
+                d.last_updated_at AS last_updated_at
+            FROM \(SearchEngineMigrationSQL.documentsTableName) AS d
+            WHERE d.keywords LIKE ?
               AND TRIM(d.title) <> ''
             \(scopeCondition)
         ),
