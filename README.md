@@ -3,37 +3,22 @@
 Clean Architecture + MVVM 환경에서 App 타겟이 SPM 모듈로 의존하는 형태를 전제로 만든 SearchEngine 모듈입니다.
 이 모듈은 **로컬 검색 엔진(Local Search Engine)** 역할에 집중하며, SQLite + FTS5 기반 검색 구조를 외부에 직접 노출하지 않고 **공개 모델 + 공개 계약 + 내부 구현체**로 역할을 분리합니다.
 
-모듈 내부는 문서 색인, 검색, 자동완성, projection rebuild 기능을 단계적으로 확장할 수 있도록 설계되어 있으며,
-상위 계층은 `SearchEngineContainer`를 통해 검색 엔진 foundation을 초기화하고 필요한 공개 계약에 의존하도록 구성합니다.
-
-현재 업로드된 구현 기준으로는 **SQLite foundation과 공개 계약, 내부 Store/Indexing 구현체, rebuild 경로, 테스트 기반 검증 구조**까지 포함되어 있습니다.
-다만 아직 **모듈 외부에서 바로 사용할 공개 SearchEngine 구현체는 노출하지 않고**, `SearchEngineProtocol`과 `SearchEngineContainer` 중심으로 초기화 기반을 먼저 마련한 상태입니다.
+모듈 내부는 문서 색인, 검색, 자동완성, projection rebuild 기능을 포함하며,
+상위 계층은 `SearchEngineContainer.makeSearchEngine()`을 통해 `SearchEngineProtocol`을 즉시 사용할 수 있습니다.
 
 **요약**
 - 저장소 초기화: `SearchEngineConfiguration` + `SQLiteStorage`
 - 조립 진입점: `SearchEngineContainer`
+- 공개 엔진: `makeSearchEngine()` → `some SearchEngineProtocol`
 - migration 정책: `SearchEngineMigrationPlan`
 - 공개 계약: `Interface/Models`, `Interface/Errors`, `Interface/Protocols`
-- 내부 구현: `ManagedObjects`, `Mappers`, `StoreImplementations`, `Support`, `Indexing`
-- 현재 구현 기능: `Document Indexing`, `Search`, `Suggestion`, `Rebuild`
-- 현재 공개 상태: foundation/계약 공개, 내부 Store/Indexing 구현체는 모듈 내부 조립 기준
+- 내부 구현: `Records`, `Mappers`, `StoreImplementations`, `Support`, `Indexing`
+- 구현 기능: `Document Indexing`, `Search`, `Suggestion`, `Rebuild`
+- 초성 검색: 자모 전용 입력 감지 + `keywords LIKE` fallback
 
 ---
 
 **모듈 구조**
-- Interface
-  - Models
-  - Errors
-  - Protocols
-- Core
-- ManagedObjects
-- Mappers
-- StoreImplementations
-- Support
-- Indexing
-- Tests
-
-예시 구조:
 ```text
 SearchEngine/
 ├─ Package.swift
@@ -57,15 +42,16 @@ SearchEngine/
 │     │  ├─ SQLiteDatabaseProtocol.swift
 │     │  ├─ SQLiteStorage.swift
 │     │  ├─ SQLiteStorageProtocol.swift
+│     │  ├─ SQLiteSearchEngine.swift
 │     │  ├─ SearchEngineConfiguration.swift
 │     │  ├─ SearchEngineContainer.swift
 │     │  ├─ SearchEngineMigrationPlan.swift
 │     │  └─ SQL/
 │     │     └─ SearchEngineMigrationSQL.swift
-│     ├─ ManagedObjects/
-│     │  ├─ SearchDocumentMO.swift
-│     │  ├─ SearchHitMO.swift
-│     │  └─ SearchSuggestionMO.swift
+│     ├─ Records/
+│     │  ├─ SearchDocumentRecord.swift
+│     │  ├─ SearchHitRecord.swift
+│     │  └─ SearchSuggestionRecord.swift
 │     ├─ Mappers/
 │     │  ├─ SearchDocumentMapper.swift
 │     │  ├─ SearchHitMapper.swift
@@ -115,7 +101,7 @@ SearchEngine/
       ├─ Indexing/
       │  ├─ SearchProjectionMapperTests.swift
       │  └─ SearchRebuilderTests.swift
-      └─ TestSupportTests/
+      └─ TestSupport/
          ├─ InMemorySQLiteDatabase.swift
          └─ InMemorySQLiteStorage.swift
 ```
@@ -123,27 +109,40 @@ SearchEngine/
 ---
 
 **빠른 시작**
-현재 업로드된 구현 기준에서 SearchEngine 모듈은 **공개 초기화 진입점과 공개 계약을 먼저 제공하는 상태**입니다.
-즉 상위 계층은 우선 `SearchEngineContainer`와 `SearchEngineConfiguration`을 통해 foundation을 초기화하고,
-이후 공개 `SearchEngineProtocol` 구현체가 연결될 수 있는 기반을 준비하게 됩니다.
+
+`SearchEngineContainer.makeSearchEngine()`은 `SearchEngineProtocol`을 즉시 반환합니다.
 
 ```swift
 import SearchEngine
 
-let container = try SearchEngineContainer.makeDefault()
-print(container.configuration)
+let engine = try SearchEngineContainer.makeDefault().makeSearchEngine()
+
+// 문서 색인
+try engine.index(SearchDocument(
+    id: "guide-1",
+    scope: SearchScope(rawValue: "app.guide"),
+    title: "Swift Search Engine",
+    body: "SQLite FTS5 기반 검색",
+    keywords: ["swift", "fts"],
+    lastUpdatedAt: Date()
+))
+
+// 검색
+let hits = try engine.search(SearchQuery(text: "swift"))
+
+// 자동완성
+let suggestions = try engine.suggest(SearchSuggestionQuery(text: "swift s"))
 ```
 
-테스트나 샘플 실행처럼 디스크 저장소가 필요 없는 환경에서는 in-memory 구성이 더 간단합니다.
+테스트나 샘플 실행처럼 디스크 저장소가 필요 없는 환경에서는 in-memory 구성을 사용합니다.
 
 ```swift
 import SearchEngine
 
-let container = try SearchEngineContainer.makeDefaultInMemory()
-print(container.configuration)
+let engine = try SearchEngineContainer.makeDefaultInMemory().makeSearchEngine()
 ```
 
-특정 경로와 SQLite 정책을 직접 제어하고 싶다면 설정 객체를 먼저 생성한 뒤 컨테이너를 초기화할 수 있습니다.
+특정 경로와 SQLite 정책을 직접 제어하려면 설정 객체를 먼저 생성합니다.
 
 ```swift
 import SearchEngine
@@ -157,66 +156,76 @@ let configuration = try SearchEngineConfiguration.live(
     enablesForeignKeys: true
 )
 
-let container = try SearchEngineContainer.make(configuration: configuration)
-print(container.configuration)
+let engine = try SearchEngineContainer.make(configuration: configuration).makeSearchEngine()
 ```
 
 ---
 
 **핵심 설계 방향**
-SearchEngine 모듈은 다음 원칙을 기준으로 구성합니다.
 
 - **외부 공개 계약과 내부 SQLite 구현 분리**
-  - 상위 계층은 `Interface/Models`, `Interface/Errors`, `Interface/Protocols`에만 의존합니다.
-  - `sqlite3`, FTS5 SQL, prepared statement, projection 관리 같은 세부 구현은 내부에 감춥니다.
+  상위 계층은 `Interface/Models`, `Interface/Errors`, `Interface/Protocols`에만 의존합니다.
+  `sqlite3`, FTS5 SQL, prepared statement, projection 관리 세부 구현은 내부에 감춥니다.
 
 - **조립 지점 통일**
-  - 앱 또는 상위 모듈은 `SearchEngineContainer`를 통해 검색 엔진 foundation을 초기화합니다.
-  - 구체 저장 구현체와 rebuild 경로는 동일한 SQLite foundation을 기준으로 조립되도록 정리합니다.
+  앱 또는 상위 모듈은 `SearchEngineContainer`를 통해 검색 엔진을 초기화합니다.
+  문서 저장, 검색, suggestion, rebuild가 모두 같은 migration 규칙과 같은 SQLite 연결 정책 위에서 동작합니다.
 
 - **기능 책임 분리**
-  - 문서 저장은 `SearchDocument Store`
-  - 검색 실행은 `Search Store`
-  - 자동완성은 `SearchSuggestion Store`
-  - projection 복구는 `SearchRebuilder`
-  - SQL 조립과 FTS 질의 문자열 생성은 `Support`
-  - 값 변환은 `Mappers`
+  - 문서 저장: `SQLiteSearchDocumentStore`
+  - 검색 실행: `SQLiteSearchStore`
+  - 자동완성: `SQLiteSearchSuggestionStore`
+  - projection 복구: `SearchRebuilder`
+  - SQL 조립 및 FTS 질의: `Support`
+  - 값 변환: `Mappers`
 
 - **테스트 친화적인 구조**
-  - 디스크 기반 live 설정뿐 아니라 in-memory SQLite 설정도 지원합니다.
-  - Core / Interface / Mappers / StoreImplementations / Indexing 단위로 테스트를 분리해 기능 검증 경계를 명확히 유지합니다.
+  디스크 기반 live 설정과 in-memory SQLite 설정을 모두 지원합니다.
+  Core / Interface / Mappers / StoreImplementations / Indexing 단위로 테스트를 분리해 기능 검증 경계를 명확히 유지합니다.
 
-- **장기 확장을 고려한 로컬 검색 기반**
-  - 현재는 SQLite + FTS5 기반 기본 검색 인프라와 rebuild 흐름을 제공하고,
-    이후 tokenizer 전략, snippet 고도화, ranking 개선, 공개 엔진 조립 확장까지 이어질 수 있도록 foundation을 먼저 정리합니다.
+---
+
+**SearchEngineProtocol**
+
+`SearchEngineProtocol`은 상위 계층이 의존하는 공개 검색 엔진 계약입니다.
+
+```swift
+public protocol SearchEngineProtocol {
+    func index(_ document: SearchDocument) throws
+    func index(_ documents: [SearchDocument]) throws
+    func deleteDocument(id: String) throws
+    func search(_ query: SearchQuery) throws -> [SearchHit]
+    func suggest(_ query: SearchSuggestionQuery) throws -> [SearchSuggestion]
+    func rebuild() throws
+}
+```
 
 ---
 
 **SearchEngineContainer**
+
 `SearchEngineContainer`는 SearchEngine 모듈의 **조립 진입점(composition entry point)** 입니다.
 
-제공 기능:
-- `make(configuration:)`
-- `makeDefault()`
-- `makeDefaultInMemory()`
+제공 팩토리:
+- `make(configuration:)` — 커스텀 설정 기반 컨테이너
+- `makeDefault()` — 디스크 기반 기본 설정 컨테이너
+- `makeDefaultInMemory()` — 메모리 기반 컨테이너
 
-예시:
+제공 메서드:
+- `makeSearchEngine() -> some SearchEngineProtocol` — `SQLiteSearchEngine` 반환
+
 ```swift
-let configuration = try SearchEngineConfiguration.live()
-let container = try SearchEngineContainer.make(configuration: configuration)
+let container = try SearchEngineContainer.makeDefault()
+let engine = container.makeSearchEngine()
 ```
 
-현재 업로드된 구현에서는 컨테이너가 내부적으로 같은 SQLite foundation을 재사용하는 저장 구현체와 rebuild 구현체를 조립하는 기반 역할을 담당합니다.
-즉 문서 저장, 검색, suggestion, rebuild가 모두 같은 migration 규칙과 같은 SQLite 연결 정책 위에서 동작하도록 만드는 시작점입니다.
-
-중요한 점:
-- 현재 단계에서는 `SearchEngineProtocol`을 바로 반환하는 공개 엔진 팩토리는 아직 제공하지 않습니다.
-- 즉 이 컨테이너는 **공개 초기화 기반** 역할에 집중합니다.
-- 실제 공개 엔진 구현체는 이후 단계에서 이 foundation 위에 추가하는 방향이 자연스럽습니다.
+컨테이너가 내부적으로 같은 SQLite foundation을 재사용하는 저장 구현체와 rebuild 구현체를 조립합니다.
+`makeSearchEngine()`은 `SQLiteSearchDocumentStore`, `SQLiteSearchStore`, `SQLiteSearchSuggestionStore`, `SearchRebuilder`를 모두 같은 storage 위에 조립해 반환합니다.
 
 ---
 
 **SearchEngineConfiguration**
+
 `SearchEngineConfiguration`은 검색 엔진 초기화에 필요한 값을 한 곳에 모아 관리하는 설정 객체입니다.
 
 주요 설정 항목:
@@ -230,227 +239,155 @@ let container = try SearchEngineContainer.make(configuration: configuration)
 - `live(...)`: 디스크 기반 SQLite 저장소
 - `inMemory(...)`: 메모리 기반 SQLite 저장소
 
-### live 예시
 ```swift
+// 디스크 기반
 let configuration = try SearchEngineConfiguration.live(
     directoryName: "SearchEngine",
     fileName: "SearchEngine.sqlite"
 )
-```
 
-### in-memory 예시
-```swift
+// in-memory
 let configuration = SearchEngineConfiguration.inMemory(
     identifier: "SearchEngine.InMemory"
 )
 ```
 
-또한 `databaseURL()`을 통해 디스크 저장소일 때 실제 SQLite 파일 경로를 계산할 수 있으며,
-in-memory 구성에서는 `nil`을 반환합니다.
+`databaseURL()`을 통해 디스크 저장소일 때 실제 SQLite 파일 경로를 계산할 수 있으며, in-memory 구성에서는 `nil`을 반환합니다.
 
 ---
 
 **Migration**
+
 `SearchEngineMigrationPlan`은 SQLite 저장소를 열 때 적용할 migration 정책을 정의합니다.
+버전은 SQLite `PRAGMA user_version`으로 추적하며, 현재 버전보다 높은 migration만 적용합니다.
 
 기본 제공 정책:
-- `SearchEngineMigrationPlan.sqliteCore`
-- `SearchEngineMigrationPlan.searchIndexing`
-- `SearchEngineMigrationPlan.disabled`
 
 ### sqliteCore
-- 메타데이터 테이블 생성
+- 메타데이터 테이블 생성 (v1)
 - 최소 SQLite foundation 준비
 
 ### searchIndexing
 - `sqliteCore` 포함
-- documents 원본 테이블 생성
+- documents 원본 테이블 생성 (v2)
 - scope + updatedAt 인덱스 생성
-- FTS projection 테이블 생성
+- FTS5 projection 테이블 생성 (`tokenize = 'unicode61'`, `prefix = '1 2 3 4'`)
 
 ### disabled
 - migration 미수행
-- 이미 준비된 데이터베이스를 외부에서 관리하거나, migration 적용을 별도로 통제하는 환경에서 사용 가능
+- 이미 준비된 데이터베이스를 외부에서 관리하거나 migration을 별도로 통제하는 환경에서 사용
 
-예시:
 ```swift
 let configuration = try SearchEngineConfiguration.live(
     migrationPlan: .searchIndexing
 )
 ```
 
-중요한 점:
-- migration 정책을 **결정하는 곳은 `SearchEngineConfiguration`** 입니다.
-- `SQLiteStorage`와 `SQLiteDatabase`는 준비된 정책을 기준으로 저장소를 초기화합니다.
-- 즉 migration은 실행 구현체 내부의 임시 분기보다 **configuration 기반 정책 주입**으로 관리합니다.
-
----
-
-**SQLite foundation**
-SearchEngine 모듈의 Core 계층은 SQLite 기반 foundation을 담당합니다.
-
-주요 타입:
-- `SQLiteDatabase`
-- `SQLiteDatabaseProtocol`
-- `SQLiteStorage`
-- `SQLiteStorageProtocol`
-- `SearchEngineMigrationSQL`
-
-담당 역할:
-- SQLite 연결 열기
-- PRAGMA 적용
-- migration 수행
-- 공통 SQL 실행 경로 제공
-- read / execute / transaction 경계 관리
-- FTS projection 테이블을 포함한 초기 스키마 구성
-
-상위 계층은 이 foundation을 직접 다루기보다,
-공개 계약과 컨테이너를 중심으로 사용하는 구조가 더 적합합니다.
-
----
-
-**공개 모델과 계약**
-SearchEngine 모듈이 외부에 노출하는 주요 공개 타입은 다음과 같습니다.
-
-### Models
-- `SearchDocument`
-- `SearchHit`
-- `SearchQuery`
-- `SearchScope`
-- `SearchSnippet`
-- `SearchSuggestion`
-- `SearchSuggestionQuery`
-
-### Errors
-- `SearchEngineError`
-
-### Protocols
-- `SearchEngineProtocol`
-
-이 구조의 목적은 다음과 같습니다.
-- 상위 계층이 SQLite 내부 타입을 몰라도 된다.
-- 로컬 검색 구현을 바꾸더라도 공개 계약은 안정적으로 유지할 수 있다.
-- 이후 공개 엔진 구현체를 교체하거나 테스트 더블을 만들기 쉽다.
+migration 정책을 결정하는 곳은 `SearchEngineConfiguration`입니다.
+`SQLiteStorage`와 `SQLiteDatabase`는 준비된 정책을 기준으로 저장소를 초기화합니다.
 
 ---
 
 **현재 구현 기능**
-현재 업로드된 SearchEngine 구현은 내부적으로 아래 기능을 포함합니다.
 
 ### 1. Document Indexing
+
 문서를 원본 documents 테이블과 FTS projection에 함께 저장합니다.
 
-특징:
 - `SearchDocument` 검증 수행
 - 같은 `id` 기준 upsert 저장
 - 문서 삭제 시 원본 row와 projection row를 함께 제거
-- 저장/삭제는 transaction 경계 안에서 처리하여 정합성 유지
-- `scope`, `title`, `body`, `keywords`, `lastUpdatedAt`를 정규화해 저장
+- 저장/삭제는 transaction 경계 안에서 처리해 정합성 유지
+- `scope`, `title`, `body`, `keywords`, `lastUpdatedAt` 정규화 저장
+- keywords는 `\n` 구분자로 join해 단일 컬럼에 저장
 
-관련 내부 구현:
-- `SQLiteSearchDocumentStore`
-- `SearchDocumentMO`
-- `SearchDocumentMapper`
+관련 내부 구현: `SQLiteSearchDocumentStore`, `SearchDocumentRecord`, `SearchDocumentMapper`
 
 ### 2. Search
+
 FTS 기반 검색 질의를 실행하고 `SearchHit` 목록을 반환합니다.
 
-특징:
 - `SearchQuery` 검증 수행
 - `scope` 필터 지원
 - `limit`, `offset` 지원
 - 검색 결과는 `SearchDocument + score + snippet` 형태로 반환
-- 내부적으로 FTS MATCH 질의와 정렬 정책을 사용
+- FTS MATCH 질의와 BM25 기반 정렬 정책 사용
 
-관련 내부 구현:
-- `SQLiteSearchStore`
-- `SearchHitMO`
-- `SearchHitMapper`
-- `SearchMatchQueryBuilder`
+관련 내부 구현: `SQLiteSearchStore`, `SearchHitRecord`, `SearchHitMapper`, `SearchMatchQueryBuilder`
 
 ### 3. Suggestion
+
 입력 중인 검색어에 대한 자동완성 결과를 생성합니다.
 
-특징:
 - `SearchSuggestionQuery` 검증 수행
-- 현재 자동완성은 **title 컬럼 기반 token prefix MATCH** 전략 사용
+- title / keywords / body 컬럼 기반 LIKE 매칭
+- FTS MATCH와 title LIKE 점수 조합으로 exact / prefix / contains 우선순위 반영
 - `scope` 필터 지원
-- 같은 title/scope suggestion dedupe
-- exact / prefix / contains 우선순위 반영
+- 같은 title/scope suggestion 중복 제거 (window function `ROW_NUMBER`)
+- 중복 문서 수 반영 점수 보정 (`base_score + duplicate_count * 10`)
 - 최신 문서와 정규화된 title 기준 정렬 보조 적용
 
-관련 내부 구현:
-- `SQLiteSearchSuggestionStore`
-- `SearchSuggestionMO`
-- `SearchSuggestionMapper`
+관련 내부 구현: `SQLiteSearchSuggestionStore`, `SearchSuggestionRecord`, `SearchSuggestionMapper`
 
-### 4. Rebuild
+### 4. 초성 검색 (Korean Consonant Search)
+
+한글 자모(초성) 전용 입력을 감지해 `keywords LIKE` 기반 fallback 경로로 처리합니다.
+
+배경:
+- AppData 계층의 `KoreanChosungExtractor`가 한글 제목에서 초성을 추출해 `SearchDocument.keywords`에 추가합니다.
+- 예: `"음악"` → 초성 `"ㅇㅇ"`, `"카카오톡"` → `"ㅋㅋㅌ"`
+- SearchEngine은 keywords에 저장된 초성을 안정적으로 조회하는 Infrastructure 책임을 담당합니다.
+
+동작 방식:
+- `SearchMatchQueryBuilder.isJamoOnlyQuery(_:)`가 입력이 Hangul Compatibility Jamo (U+3130–U+318F)로만 이루어졌는지 판별합니다.
+- 자모 전용 입력이면 FTS MATCH 대신 `search_documents` 원본 테이블의 `keywords LIKE '%자모%'` 경로를 사용합니다.
+- `unicode61` 토크나이저의 자모 word character 처리 불확실성을 우회해 안정적인 결과를 보장합니다.
+- 자모 쿼리 결과는 `source = .keyword`, `kind = .document`로 반환됩니다.
+- 같은 title의 중복 제거와 점수 계산은 일반 suggestion과 동일한 CTE 구조를 따릅니다.
+
+완성 음절 입력(예: `"음"`)은 자모 경로가 아닌 기존 FTS prefix MATCH 경로를 사용합니다.
+
+```swift
+// "ㅇㅇ" 입력 → keywords에 "ㅇㅇ"가 포함된 문서의 제목을 반환
+let suggestions = try engine.suggest(SearchSuggestionQuery(text: "ㅇㅇ"))
+// suggestions.first?.text == "음악"
+// suggestions.first?.source == .keyword
+```
+
+관련 내부 구현: `SearchMatchQueryBuilder.isJamoOnlyQuery(_:)`, `SQLiteSearchSuggestionStore.suggestWithJamoFallback(normalizedInput:query:)`
+
+### 5. Rebuild
+
 원본 documents 테이블을 기준으로 FTS projection 전체를 다시 구성합니다.
 
-특징:
 - projection 손상 복구 경로 제공
-- 원본 문서를 기준으로 projection 전체를 다시 적재
 - projection delete + insert를 transaction 경계에서 수행
 - 테스트, 장애 복구, migration 이후 정합성 확인에 적합
 
-관련 내부 구현:
-- `SearchRebuilder`
-- `SearchProjectionMapper`
+관련 내부 구현: `SearchRebuilder`, `SearchProjectionMapper`
 
 ---
 
-**Interface / ManagedObjects / Mapper / StoreImplementations / Support / Indexing**
-SearchEngine 내부 구현은 아래 계층으로 나뉩니다.
+**공개 모델과 계약**
 
-### Interface
-모듈 외부에 공개할 모델, 에러, 프로토콜을 정의합니다.
+### Models
 
-### ManagedObjects
-SQLite row 결과를 내부에서 다루기 위한 ManagedObject 성격의 값 타입입니다.
+| 타입 | 설명 |
+|---|---|
+| `SearchDocument` | 색인 대상 문서. id, scope, title, body, keywords, lastUpdatedAt |
+| `SearchHit` | 검색 결과 항목. document, score, snippet |
+| `SearchQuery` | 검색 질의. text, scope, limit, offset |
+| `SearchScope` | 검색 범위 식별자 |
+| `SearchSnippet` | 검색 결과 하이라이트 텍스트 |
+| `SearchSuggestion` | 자동완성 후보. text, scope, score, source, kind, documentID, matchedText |
+| `SearchSuggestionQuery` | 자동완성 질의. text, scope, limit |
 
-예:
-- `SearchDocumentMO`
-- `SearchHitMO`
-- `SearchSuggestionMO`
+`SearchSuggestionSource`: `.title`, `.body`, `.keyword`
+`SearchSuggestionKind`: `.query`, `.document`
 
-### Mappers
-공개 모델과 ManagedObject 사이를 변환합니다.
+### Errors
 
-예:
-- `SearchDocumentMapper`
-- `SearchHitMapper`
-- `SearchSuggestionMapper`
-
-### StoreImplementations
-실제 SQLite 저장/검색/제안 로직을 구현합니다.
-
-예:
-- `SQLiteSearchDocumentStore`
-- `SQLiteSearchStore`
-- `SQLiteSearchSuggestionStore`
-
-### Support
-SQL 조립과 FTS 질의 문자열 생성을 보조합니다.
-
-예:
-- `SQLBuilder`
-- `SearchMatchQueryBuilder`
-
-### Indexing
-projection 적재와 rebuild 같은 색인 유지/복구 역할을 담당합니다.
-
-예:
-- `SearchProjectionMapper`
-- `SearchRebuilder`
-
-이 구조 덕분에 공개 API, SQLite foundation, 검색 실행 로직, 색인 복구 로직의 경계를 비교적 안정적으로 유지할 수 있습니다.
-
----
-
-**에러 모델**
-SearchEngine 모듈은 `SearchEngineError`를 통해 검색 엔진 관련 오류를 일관되게 전달합니다.
-
-주요 케이스:
+`SearchEngineError` 주요 케이스:
 - `invalidConfiguration`
 - `invalidDocument`
 - `invalidQuery`
@@ -464,50 +401,99 @@ SearchEngine 모듈은 `SearchEngineError`를 통해 검색 엔진 관련 오류
 - `writeFailed`
 - `transactionFailed`
 
-상위 계층은 SQLite의 원시 에러 문자열을 직접 해석하기보다,
-`SearchEngineError`를 기준으로 실패 원인을 분기하는 것이 좋습니다.
+### Protocols
+
+`SearchEngineProtocol`: 검색 엔진 공개 계약
+
+상위 계층은 SQLite 내부 타입을 몰라도 됩니다. 공개 계약 기반으로 테스트 더블을 만들거나 내부 구현을 교체할 수 있습니다.
+
+---
+
+**내부 계층 구성**
+
+### Interface
+모듈 외부에 공개할 모델, 에러, 프로토콜을 정의합니다.
+
+### Records
+SQLite row 결과를 내부에서 다루기 위한 값 타입입니다.
+- `SearchDocumentRecord`
+- `SearchHitRecord`
+- `SearchSuggestionRecord`
+
+### Mappers
+공개 모델과 Record 사이를 변환합니다.
+- `SearchDocumentMapper`
+- `SearchHitMapper`
+- `SearchSuggestionMapper`
+
+### StoreImplementations
+실제 SQLite 저장/검색/제안 로직을 구현합니다.
+- `SQLiteSearchDocumentStore`
+- `SQLiteSearchStore`
+- `SQLiteSearchSuggestionStore`
+
+### Support
+SQL 조립과 FTS 질의 문자열 생성을 보조합니다.
+- `SQLBuilder`: ORDER BY, WHERE 절 조립
+- `SearchMatchQueryBuilder`: MATCH 쿼리 토큰 정규화, 자모 입력 감지
+
+### Indexing
+projection 적재와 rebuild 같은 색인 유지/복구 역할을 담당합니다.
+- `SearchProjectionMapper`
+- `SearchRebuilder`
+
+---
+
+**SQLite foundation**
+
+Core 계층은 SQLite 기반 foundation을 담당합니다.
+
+- `SQLiteDatabase`: SQLite 연결 열기, PRAGMA 적용, migration 수행, 공통 SQL 실행
+- `SQLiteStorage`: read / execute / transaction 경계 관리
+- `SearchEngineMigrationSQL`: FTS projection을 포함한 초기 스키마 SQL
+
+FTS5 설정:
+```sql
+USING fts5(
+    id UNINDEXED,
+    scope UNINDEXED,
+    title,
+    body,
+    keywords,
+    tokenize = 'unicode61',
+    prefix = '1 2 3 4'
+)
+```
+
+`prefix = '1 2 3 4'`는 단일 자모 문자를 포함한 1~4글자 접두어 인덱스를 생성합니다.
 
 ---
 
 **테스트**
-모듈은 in-memory SQLite 환경을 활용한 테스트를 포함합니다.
+
+모듈은 in-memory SQLite 환경을 활용한 129개 테스트를 포함합니다.
 
 포함된 테스트 범위:
-- `SQLiteDatabaseTests`
-- `SQLiteStorageTests`
-- `SearchEngineConfigurationTests`
-- `SearchEngineMigrationPlanTests`
-- `SearchEngineContainerTests`
-- `SearchDocumentTests`
-- `SearchQueryTests`
-- `SearchScopeTests`
-- `SearchSuggestionTests`
-- `SearchSuggestionQueryTests`
-- `SearchDocumentMapperTests`
-- `SearchHitMapperTests`
-- `SearchSuggestionMapperTests`
-- `SQLiteSearchDocumentStoreTests`
-- `SQLiteSearchStoreTests`
-- `SQLiteSearchSuggestionStoreTests`
-- `SearchProjectionMapperTests`
-- `SearchRebuilderTests`
-- `SQLBuilderTests`
-- `SearchMatchQueryBuilderTests`
+- Core foundation: `SQLiteDatabaseTests`, `SQLiteStorageTests`, `SearchEngineConfigurationTests`, `SearchEngineMigrationPlanTests`, `SearchEngineContainerTests`
+- Interface Models: `SearchDocumentTests`, `SearchQueryTests`, `SearchScopeTests`, `SearchSuggestionTests`, `SearchSuggestionQueryTests`
+- Mappers: `SearchDocumentMapperTests`, `SearchHitMapperTests`, `SearchSuggestionMapperTests`
+- StoreImplementations: `SQLiteSearchDocumentStoreTests`, `SQLiteSearchStoreTests`, `SQLiteSearchSuggestionStoreTests`
+- Support: `SQLBuilderTests`, `SearchMatchQueryBuilderTests` (자모 감지 포함)
+- Indexing: `SearchProjectionMapperTests`, `SearchRebuilderTests`
 
 테스트 전략:
 - Core foundation 테스트와 기능 테스트를 분리합니다.
 - in-memory SQLite 환경으로 빠르고 독립적인 검증을 수행합니다.
-- 문서 저장, 검색, suggestion, rebuild, query validation, mapper 변환, container 조립 결과를 함께 검증합니다.
+- 자모 입력 시나리오(`"ㅇㅇ"` → `"음악"` 반환 등)를 단위 테스트로 고정합니다.
 
 ---
 
 **권장 사용 전략**
 - 상위 계층은 `SearchEngineContainer`와 공개 계약 타입을 기준으로 의존성을 설계합니다.
-- 화면/UseCase/Repository는 `SearchEngineProtocol`과 `Interface/Models` 중심으로 바라보는 방향이 적합합니다.
-- `SQLiteDatabase`, `SQLiteStorage`, `StoreImplementations`, `Indexing` 직접 의존은 SearchEngine 내부에 제한하는 것이 좋습니다.
+- UseCase/Repository는 `SearchEngineProtocol`과 `Interface/Models` 중심으로 바라봅니다.
+- `SQLiteDatabase`, `SQLiteStorage`, `StoreImplementations`, `Indexing` 직접 의존은 SearchEngine 내부에 제한합니다.
 - 운영 환경은 `live`, 테스트와 샘플 실행은 `inMemory`를 우선 사용합니다.
 - migration 정책은 `SearchEngineMigrationPlan`으로 환경별 분리 구성을 권장합니다.
-- 현재 단계에서는 공개 엔진 구현체가 아직 없으므로, 외부 사용 README와 내부 개발 README를 구분해 관리하면 더 명확합니다.
 
 ---
 
@@ -516,7 +502,7 @@ SearchEngine 모듈은 `SearchEngineError`를 통해 검색 엔진 관련 오류
 2. `Interface/Protocols`에 공개 계약 추가 또는 세분화
 3. `Core/SQL`에 migration SQL 추가
 4. `SearchEngineMigrationPlan`에 버전 증가 반영
-5. `ManagedObjects`에 내부 row 모델 추가
+5. `Records`에 내부 row 모델 추가
 6. `Mappers`에 변환기 추가
 7. `StoreImplementations`에 저장/검색 구현체 추가
 8. `Support`에 SQL 조립기 또는 query builder 추가
@@ -527,5 +513,4 @@ SearchEngine 모듈은 `SearchEngineError`를 통해 검색 엔진 관련 오류
 ---
 
 Created by: JEONG, Chi-hong  
-SearchEngine README draft adapted for current module state  
-April 2026
+Updated: May 2026

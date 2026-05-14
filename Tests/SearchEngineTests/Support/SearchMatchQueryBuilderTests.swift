@@ -114,4 +114,68 @@ final class SearchMatchQueryBuilderTests: XCTestCase {
 
         XCTAssertEqual(matchQuery, #"title:"swift"* AND title:"""engine"""*"#)
     }
+
+    func test_isJamoOnlyQuery_withJamoOnlyInput_returnsTrue() {
+        // given / when
+        let result = SearchMatchQueryBuilder.isJamoOnlyQuery("ㅇㅇ")
+
+        // then
+        XCTAssertTrue(result)
+    }
+
+    func test_isJamoOnlyQuery_withSingleJamo_returnsTrue() {
+        // given / when
+        let result = SearchMatchQueryBuilder.isJamoOnlyQuery("ㄱ")
+
+        // then
+        XCTAssertTrue(result)
+    }
+
+    func test_isJamoOnlyQuery_withMultipleJamo_returnsTrue() {
+        // given / when
+        let result = SearchMatchQueryBuilder.isJamoOnlyQuery("ㄷㄱ")
+
+        // then
+        XCTAssertTrue(result)
+    }
+
+    func test_isJamoOnlyQuery_withKoreanSyllable_returnsFalse() {
+        // given / when
+        let result = SearchMatchQueryBuilder.isJamoOnlyQuery("음악")
+
+        // then
+        XCTAssertFalse(result)
+    }
+
+    func test_isJamoOnlyQuery_withMixedJamoAndSyllable_returnsFalse() {
+        // given / when
+        let result = SearchMatchQueryBuilder.isJamoOnlyQuery("ㅇ음")
+
+        // then
+        XCTAssertFalse(result)
+    }
+
+    func test_isJamoOnlyQuery_withLatinInput_returnsFalse() {
+        // given / when
+        let result = SearchMatchQueryBuilder.isJamoOnlyQuery("swift")
+
+        // then
+        XCTAssertFalse(result)
+    }
+
+    func test_isJamoOnlyQuery_withEmptyInput_returnsFalse() {
+        // given / when
+        let result = SearchMatchQueryBuilder.isJamoOnlyQuery("")
+
+        // then
+        XCTAssertFalse(result)
+    }
+
+    func test_isJamoOnlyQuery_withWhitespaceOnly_returnsFalse() {
+        // given / when
+        let result = SearchMatchQueryBuilder.isJamoOnlyQuery("   ")
+
+        // then
+        XCTAssertFalse(result)
+    }
 }

@@ -27,6 +27,22 @@ enum SearchMatchQueryBuilder {
         try buildMatchQuery(from: query.text)
     }
 
+    /// 입력 문자열이 한글 자모(초성/중성)로만 이루어졌는지 판별합니다.
+    ///
+    /// U+3130–U+318F (Hangul Compatibility Jamo) 범위에 속하는 문자로만 구성된 경우 true를 반환합니다.
+    /// FTS MATCH 대신 LIKE 기반 keywords fallback을 적용할지 결정하는 데 사용합니다.
+    ///
+    /// - Parameter text: 판별할 입력 문자열입니다.
+    ///
+    /// - Returns: 자모로만 이루어진 비어 있지 않은 문자열이면 true, 그 외에는 false입니다.
+    static func isJamoOnlyQuery(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else { return false }
+        return trimmed.unicodeScalars.allSatisfy { scalar in
+            scalar.value >= 0x3130 && scalar.value <= 0x318F
+        }
+    }
+
     /// 특정 FTS 컬럼만 대상으로 하는 MATCH 문자열을 생성합니다.
     ///
     /// 특정 컬럼만 검색해야 하는 Store 구현에서 사용할 수 있도록,
